@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "comrade",
+    "comrade-cli",
+]
+
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+overflow-checks = true

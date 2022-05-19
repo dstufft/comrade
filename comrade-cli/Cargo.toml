@@ -1,0 +1,11 @@
+[package]
+name = "comrade-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "comrade"
+path = "src/main.rs"
+
+[dependencies]
+comrade = { path = "../comrade" }
