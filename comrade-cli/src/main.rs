@@ -15,8 +15,8 @@ fn main() -> Result<()> {
     })
     .expect("Error setting Ctrl-C handler");
 
-    let mut manager = LogManager::new();
-    manager.add(LOGPATH);
+    let mut manager = LogManager::new()?;
+    manager.add(LOGPATH)?;
 
     while running.load(Ordering::SeqCst) {
         thread::sleep(time::Duration::from_secs(1))

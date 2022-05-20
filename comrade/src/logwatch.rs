@@ -6,6 +6,10 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use crate::errors::LogWatcherError;
+
+type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
+
 #[derive(Debug)]
 struct LogReader {
     filename: PathBuf,
@@ -72,13 +76,16 @@ impl LogDispatcher {
         }
     }
 
-    fn add<P: Into<PathBuf>>(&mut self, filename: P, reader: LogReader) {
+    fn add<P: Into<PathBuf>>(&mut self, filename: P, reader: LogReader) -> Result<()> {
         match self.readers.entry(filename.into()) {
             hash_map::Entry::Vacant(e) => {
                 e.insert(reader);
+                Ok(())
             }
-            hash_map::Entry::Occupied(e) => println!("error: {:?}", e),
-        };
+            hash_map::Entry::Occupied(e) => Err(LogWatcherError::AlreadyWatching {
+                path: e.key().to_owned(),
+            }),
+        }
     }
 }
 
@@ -87,37 +94,33 @@ pub struct LogManager<W: Watcher> {
     watcher: W,
 }
 
-impl Default for LogManager<RecommendedWatcher> {
-    fn default() -> Self {
-        LogManager::new()
-    }
-}
-
 impl LogManager<RecommendedWatcher> {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         let dispatcher = Arc::new(Mutex::new(LogDispatcher::new()));
         let wdispatcher = dispatcher.clone();
         let watcher = notify::recommended_watcher(move |res| {
-            let mut d = wdispatcher.lock().unwrap();
+            let mut d = wdispatcher
+                .lock()
+                .expect("Error acquiring lock on dispatcher");
             d.handle_event(res);
-        })
-        .unwrap();
-        LogManager {
+        })?;
+        Ok(LogManager {
             dispatcher,
             watcher,
-        }
+        })
     }
 
-    pub fn add<P: Into<PathBuf>>(&mut self, filename: P) {
+    pub fn add<P: Into<PathBuf>>(&mut self, filename: P) -> Result<()> {
         let filename = filename.into();
         let reader = LogReader::new(filename.clone());
 
         self.dispatcher
             .lock()
-            .unwrap()
-            .add(filename.clone(), reader);
+            .expect("Error acquiring lock on dispatcher")
+            .add(filename.clone(), reader)?;
         self.watcher
-            .watch(filename.as_ref(), RecursiveMode::NonRecursive)
-            .unwrap();
+            .watch(filename.as_ref(), RecursiveMode::NonRecursive)?;
+
+        Ok(())
     }
 }
