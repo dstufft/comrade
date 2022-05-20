@@ -1,24 +1,38 @@
-use anyhow::Result;
-use comrade::logwatch::LogManager;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::{thread, time};
 
-const LOGPATH: &str = r"logfile";
+use anyhow::Result;
+use camino::Utf8PathBuf;
+use clap::Parser;
+use clap_verbosity_flag::{Verbosity, WarnLevel};
+
+use comrade::logwatch::LogManager;
+
+mod errors;
+mod utils;
+
+#[derive(Debug, Parser)]
+#[clap(version)]
+struct Cli {
+    #[clap(flatten)]
+    verbose: Verbosity<WarnLevel>,
+
+    #[clap(required = true)]
+    filename: Utf8PathBuf,
+}
 
 fn main() -> Result<()> {
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
+    // Parse CLI flags/args
+    let cli = Cli::parse();
 
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
+    // Setup our Ctrl+C handler so that we can exit cleanly
+    let running = utils::setup_ctrlc_handler()?;
 
     let mut manager = LogManager::new()?;
-    manager.add(LOGPATH)?;
+    manager.add(cli.filename)?;
 
-    while running.load(Ordering::SeqCst) {
+    // Our main loop, currently does nothing but keep the program running
+    // until someone hits Ctrl+C
+    while utils::should_continue(&running) {
         thread::sleep(time::Duration::from_secs(1))
     }
 
