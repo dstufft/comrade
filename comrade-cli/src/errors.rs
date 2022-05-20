@@ -1,7 +1,16 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub(crate) enum InitializationError {
+pub(crate) enum TerminalError {
     #[error(transparent)]
-    CtrlCHandlerError(#[from] ctrlc::Error),
+    IOError(#[from] std::io::Error),
+}
+
+#[derive(Error, Debug)]
+pub(crate) enum ApplicationError {
+    #[error(transparent)]
+    TerminalError(#[from] TerminalError),
+
+    #[error(transparent)]
+    LogWatcherError(#[from] comrade::errors::LogWatcherError),
 }

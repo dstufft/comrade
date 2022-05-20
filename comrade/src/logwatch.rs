@@ -1,9 +1,10 @@
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+pub use notify::RecommendedWatcher;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::collections::hash_map;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::errors::LogWatcherError;
@@ -89,6 +90,11 @@ impl LogDispatcher {
             }),
         }
     }
+
+    fn remove<P: AsRef<Path>>(&mut self, filename: P) -> Result<()> {
+        self.readers.remove(filename.as_ref());
+        Ok(())
+    }
 }
 
 pub struct LogManager<W: Watcher> {
@@ -122,6 +128,18 @@ impl LogManager<RecommendedWatcher> {
             .add(filename.clone(), reader)?;
         self.watcher
             .watch(filename.as_ref(), RecursiveMode::NonRecursive)?;
+
+        Ok(())
+    }
+
+    pub fn remove<P: AsRef<Path>>(&mut self, filename: P) -> Result<()> {
+        let filename = filename.as_ref();
+
+        self.dispatcher
+            .lock()
+            .expect("Error acquiring lock on dispatcher")
+            .remove(filename)?;
+        self.watcher.unwatch(filename)?;
 
         Ok(())
     }

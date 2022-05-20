@@ -13,5 +13,7 @@ anyhow = "1.0.57"
 camino = "1.0.9"
 clap = { version = "3.1.18", features = ["derive"] }
 clap-verbosity-flag = "1.0.0"
+crossterm = "0.23.2"
 ctrlc = "3.2.2"
 thiserror = "1.0.31"
+tui = "0.18.0"

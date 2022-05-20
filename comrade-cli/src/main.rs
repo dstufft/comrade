@@ -1,20 +1,25 @@
-use std::{thread, time};
+use std::time::Duration;
 
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 
-use comrade::logwatch::LogManager;
+use crate::app::App;
 
+mod app;
 mod errors;
-mod utils;
+mod terminal;
+mod ui;
 
 #[derive(Debug, Parser)]
 #[clap(version)]
 struct Cli {
     #[clap(flatten)]
     verbose: Verbosity<WarnLevel>,
+
+    #[clap(long, default_value_t = 250)]
+    tick_rate: u64,
 
     #[clap(required = true)]
     filename: Utf8PathBuf,
@@ -23,18 +28,18 @@ struct Cli {
 fn main() -> Result<()> {
     // Parse CLI flags/args
     let cli = Cli::parse();
+    let tick_rate = Duration::from_millis(cli.tick_rate);
 
-    // Setup our Ctrl+C handler so that we can exit cleanly
-    let running = utils::setup_ctrlc_handler()?;
+    // Setup our terminal
+    let mut term = terminal::setup_terminal()?;
 
-    let mut manager = LogManager::new()?;
-    manager.add(cli.filename)?;
+    // Actually run our application
+    let mut app = App::new(cli.filename)?;
+    let res = app.run(&mut term, tick_rate);
 
-    // Our main loop, currently does nothing but keep the program running
-    // until someone hits Ctrl+C
-    while utils::should_continue(&running) {
-        thread::sleep(time::Duration::from_secs(1))
-    }
+    // Restore terminal back to it's standard state
+    terminal::restore_terminal(term)?;
 
-    Ok(())
+    // Return our actual error (if there was one), mapped to our Anyhow error
+    res.map_err(From::from)
 }
