@@ -9,3 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 comrade = { path = "../comrade" }
+anyhow = "1.0.57"
+ctrlc = "3.2.2"
