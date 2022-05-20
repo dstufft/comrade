@@ -13,36 +13,38 @@ type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
 #[derive(Debug)]
 struct LogReader {
     filename: PathBuf,
-    reader: BufReader<File>,
+    reader: Option<BufReader<File>>,
     buffer: String,
 }
 
 impl LogReader {
-    fn new<P: Into<PathBuf>>(filename: P) -> LogReader {
-        let filename = filename.into();
-        let file = File::open(filename.as_path()).unwrap();
-        let mut reader = BufReader::new(file);
-        let buffer = String::new();
+    fn new<P: Into<PathBuf>>(filename: P) -> Result<LogReader> {
+        let mut lr = LogReader {
+            filename: filename.into(),
+            reader: None,
+            buffer: String::new(),
+        };
 
-        reader.seek(SeekFrom::End(0)).unwrap();
-
-        LogReader {
-            filename,
-            reader,
-            buffer,
+        lr.reopen();
+        if let Some(ref mut reader) = lr.reader {
+            reader.seek(SeekFrom::End(0))?;
         }
+
+        Ok(lr)
     }
 
     fn process(&mut self) {
-        while self.reader.read_line(&mut self.buffer).unwrap() > 0 {
-            println!("{:?}", self.buffer.trim_end());
-            self.buffer.clear();
+        if let Some(ref mut reader) = self.reader {
+            while reader.read_line(&mut self.buffer).unwrap() > 0 {
+                println!("{:?}", self.buffer.trim_end());
+                self.buffer.clear();
+            }
         }
     }
 
     fn reopen(&mut self) {
-        let file = File::open(self.filename.as_path()).unwrap();
-        self.reader = BufReader::new(file);
+        self.reader =
+            File::open(self.filename.as_path()).map_or(None, |file| Some(BufReader::new(file)));
     }
 }
 
@@ -112,7 +114,7 @@ impl LogManager<RecommendedWatcher> {
 
     pub fn add<P: Into<PathBuf>>(&mut self, filename: P) -> Result<()> {
         let filename = filename.into();
-        let reader = LogReader::new(filename.clone());
+        let reader = LogReader::new(filename.clone())?;
 
         self.dispatcher
             .lock()

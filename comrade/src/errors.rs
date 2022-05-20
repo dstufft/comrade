@@ -8,4 +8,7 @@ pub enum LogWatcherError {
 
     #[error("already watching {path:?}")]
     AlreadyWatching { path: PathBuf },
+
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
 }
