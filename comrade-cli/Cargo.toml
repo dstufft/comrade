@@ -16,6 +16,7 @@ crossterm = "0.23.2"
 downcast-rs = "1.2.0"
 indexmap = "1.8.1"
 log = { version = "0.4.17", features = ["std"] }
+path-clean = "0.1.0"
 thiserror = "1.0.31"
 tui = "0.18.0"
 tui-logger = { git = "https://github.com/gin66/tui-logger.git", rev = "cd7e42665a8eac60adac6ab5d570730dfbcb3a12" }

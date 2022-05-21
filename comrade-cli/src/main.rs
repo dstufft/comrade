@@ -1,8 +1,14 @@
+use std::env;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::Result;
-use camino::Utf8PathBuf;
+use anyhow::{Context, Result};
 use clap::Parser;
+use path_clean::PathClean;
+
+use comrade::config::Config;
+use comrade::meta;
 
 use crate::app::App;
 
@@ -17,14 +23,13 @@ struct Cli {
     #[clap(long, default_value_t = 250)]
     tick_rate: u64,
 
-    #[clap(required = true)]
-    filename: Utf8PathBuf,
+    #[clap(long)]
+    config_dir: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     // Parse CLI flags/args
     let cli = Cli::parse();
-    let tick_rate = Duration::from_millis(cli.tick_rate);
 
     // Setup our logger
     tui_logger::init_logger(log::LevelFilter::Trace)?;
@@ -33,13 +38,45 @@ fn main() -> Result<()> {
     // Setup our terminal
     let mut term = terminal::setup_terminal()?;
 
-    // Actually run our application
-    let mut app = App::new("Comrade", cli.filename)?;
-    let res = app.run(&mut term, tick_rate);
+    // Run our application, this is done inside of a function so that
+    // we can use ? without returning early, in effect we've created
+    // a psuedo try ... finally block.
+    let res = (|| -> Result<()> {
+        let tick_rate = Duration::from_millis(cli.tick_rate);
+
+        // Load our configuration
+        let config = match cli.config_dir {
+            Some(p) => {
+                let path = absolute_path(p)?;
+                Config::from_config_dir(&path).with_context(|| {
+                    format!("Failed to read configuration from {}", path.display())
+                })?
+            }
+            None => Config::from_default_dir()?,
+        };
+
+        // Actually run our application
+        let mut app = App::new(meta::PKG_NAME_DISPLAY, config)?;
+        let res = app.run(&mut term, tick_rate);
+
+        res.map_err(From::from)
+    })();
 
     // Restore terminal back to it's standard state
     terminal::restore_terminal(term)?;
 
     // Return our actual error (if there was one), mapped to our Anyhow error
     res.map_err(From::from)
+}
+
+fn absolute_path<P: AsRef<Path>>(path: P) -> io::Result<PathBuf> {
+    let path = path.as_ref();
+    let abspath = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        env::current_dir()?.join(path)
+    }
+    .clean();
+
+    Ok(abspath)
 }

@@ -6,7 +6,7 @@ use tui::widgets::{Block, Borders, Tabs};
 use tui::Frame;
 use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
 
-use crate::app::{App, DebugTab};
+use crate::app::{App, LogsTab};
 
 pub(crate) fn init_logger_state() -> TuiWidgetState {
     TuiWidgetState::new().set_default_display_level(log::LevelFilter::Debug)
@@ -29,13 +29,13 @@ pub(crate) fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     f.render_widget(tabs, chunks[0]);
 
-    if app.tabs().current().id() == "debug" {
-        draw_debug_tab(f, app, chunks[1])
+    if app.tabs().current().id() == "logs" {
+        draw_logs_tab(f, app, chunks[1])
     }
 }
 
-fn draw_debug_tab<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-    let tab: &DebugTab = app.tabs().tab("debug").expect("could not find debug tab");
+fn draw_logs_tab<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    let tab: &LogsTab = app.tabs().tab("logs").expect("could not find logs tab");
 
     let block = Block::default().borders(Borders::ALL);
     let inner_area = block.inner(area);

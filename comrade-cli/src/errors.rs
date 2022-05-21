@@ -6,6 +6,7 @@ pub(crate) enum TerminalError {
     IOError(#[from] std::io::Error),
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug)]
 pub(crate) enum ApplicationError {
     #[error(transparent)]
@@ -13,4 +14,7 @@ pub(crate) enum ApplicationError {
 
     #[error(transparent)]
     LogWatcherError(#[from] comrade::errors::LogWatcherError),
+
+    #[error(transparent)]
+    ConfigError(#[from] comrade::errors::ConfigError),
 }

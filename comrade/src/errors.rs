@@ -15,3 +15,12 @@ pub enum LogWatcherError {
     #[error("invalid file path")]
     InvalidPath { path: PathBuf },
 }
+
+#[derive(Error, Debug)]
+pub enum ConfigError {
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+
+    #[error("could not parse configuration")]
+    DeserializationError(#[from] toml_edit::de::Error),
+}

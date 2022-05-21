@@ -1,14 +1,14 @@
 use std::time::{Duration, Instant};
 
-use camino::Utf8PathBuf;
 use crossterm::event;
 use crossterm::event::{KeyCode, KeyModifiers};
 use downcast_rs::{impl_downcast, Downcast};
 use indexmap::map::IndexMap;
 
+use comrade::config::Config;
 use comrade::watcher::{LogManager, RecommendedWatcher};
 
-pub(crate) use crate::app::tabs::DebugTab;
+pub(crate) use crate::app::tabs::{ConfigTab, DebugTab, LogsTab};
 use crate::errors::{ApplicationError, TerminalError};
 use crate::terminal::ComradeTerminal;
 use crate::ui;
@@ -83,20 +83,23 @@ impl Tabs {
 pub(crate) struct App {
     title: String,
     finished: bool,
-    tabs: Tabs,
-    filename: Utf8PathBuf,
+    config: Config,
     manager: LogManager<RecommendedWatcher>,
+    tabs: Tabs,
 }
 
 impl App {
-    pub(crate) fn new<T: Into<String>>(title: T, filename: Utf8PathBuf) -> Result<App> {
-        let manager = LogManager::new()?;
+    pub(crate) fn new<T: Into<String>>(title: T, config: Config) -> Result<App> {
         Ok(App {
             title: title.into(),
             finished: false,
-            tabs: Tabs::new(vec![DebugTab::init("Debug")]),
-            filename,
-            manager,
+            config,
+            manager: LogManager::new()?,
+            tabs: Tabs::new(vec![
+                ConfigTab::init("Config"),
+                LogsTab::init("Logs"),
+                DebugTab::init("Debug"),
+            ]),
         })
     }
 
@@ -143,13 +146,17 @@ impl App {
     }
 
     fn on_start(&mut self) -> Result<()> {
-        self.manager.add(&self.filename)?;
+        for character in self.config.characters.iter() {
+            self.manager.add(&character.filename)?;
+        }
 
         Ok(())
     }
 
     fn on_end(&mut self) -> Result<()> {
-        self.manager.remove(&self.filename)?;
+        for character in self.config.characters.iter() {
+            self.manager.remove(&character.filename)?;
+        }
 
         Ok(())
     }
