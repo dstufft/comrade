@@ -49,6 +49,21 @@ impl Tabs {
         self.index
     }
 
+    pub(crate) fn next(&mut self) {
+        self.index += 1;
+        if self.index >= self.tabs.len() {
+            self.index = 0;
+        }
+    }
+
+    pub(crate) fn previous(&mut self) {
+        if self.index > 0 {
+            self.index -= 1;
+        } else {
+            self.index = self.tabs.len() - 1;
+        }
+    }
+
     pub(crate) fn current(&self) -> &dyn Tab {
         &**self
             .tabs
@@ -145,13 +160,14 @@ impl App {
         if let event::Event::Key(key) = event {
             match (key.modifiers, key.code) {
                 (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.quit(),
-                (KeyModifiers::NONE, KeyCode::Char('q')) => self.quit(),
+                (KeyModifiers::CONTROL, KeyCode::Right) => self.tabs.next(),
+                (KeyModifiers::CONTROL, KeyCode::Left) => self.tabs.previous(),
                 _ => {}
             }
         }
 
         // Our current tab needs to be able to respond to any events as well.
-        self.tabs().current().on_event(event)?;
+        self.tabs.current().on_event(event)?;
 
         Ok(())
     }
