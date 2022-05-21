@@ -1,5 +1,3 @@
-pub use notify::RecommendedWatcher;
-use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::collections::hash_map;
 use std::collections::HashMap;
 use std::fs::File;
@@ -7,21 +5,41 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use log::{debug, error, info, trace, warn};
+pub use notify::RecommendedWatcher;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
+
 use crate::errors::LogWatcherError;
+
+const LOGNAME: &str = "comrade.watcher";
+const RAW_LOGNAME: &str = "comrade.watcher.raw";
 
 type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
 
 #[derive(Debug)]
 struct LogReader {
     filename: PathBuf,
+    filename_short: String,
     reader: Option<BufReader<File>>,
     buffer: String,
 }
 
 impl LogReader {
     fn new<P: Into<PathBuf>>(filename: P) -> Result<LogReader> {
+        let filename = filename.into();
+        let filename_short = filename
+            .file_name()
+            .ok_or_else(|| LogWatcherError::InvalidPath {
+                path: filename.clone(),
+            })?
+            .to_str()
+            .ok_or_else(|| LogWatcherError::InvalidPath {
+                path: filename.clone(),
+            })?
+            .to_string();
         let mut lr = LogReader {
-            filename: filename.into(),
+            filename,
+            filename_short,
             reader: None,
             buffer: String::new(),
         };
@@ -29,6 +47,11 @@ impl LogReader {
         lr.reopen();
         if let Some(ref mut reader) = lr.reader {
             reader.seek(SeekFrom::End(0))?;
+            trace!(
+                target: LOGNAME,
+                "seeked to end of file: {}",
+                lr.filename.to_string_lossy()
+            )
         }
 
         Ok(lr)
@@ -37,15 +60,38 @@ impl LogReader {
     fn process(&mut self) {
         if let Some(ref mut reader) = self.reader {
             while reader.read_line(&mut self.buffer).unwrap() > 0 {
-                println!("{:?}", self.buffer.trim_end());
+                let line = self.buffer.trim_end();
+                trace!(
+                    target: RAW_LOGNAME,
+                    "filename: {} line: {}",
+                    self.filename_short,
+                    line
+                );
                 self.buffer.clear();
             }
         }
     }
 
     fn reopen(&mut self) {
-        self.reader =
-            File::open(self.filename.as_path()).map_or(None, |file| Some(BufReader::new(file)));
+        self.reader = match File::open(self.filename.as_path()) {
+            Ok(file) => {
+                debug!(
+                    target: LOGNAME,
+                    "opened file: {}",
+                    self.filename.to_string_lossy()
+                );
+                Some(BufReader::new(file))
+            }
+            Err(err) => {
+                debug!(
+                    target: LOGNAME,
+                    "error opening file: {} error: {:?}",
+                    self.filename.to_string_lossy(),
+                    err
+                );
+                None
+            }
+        }
     }
 }
 
@@ -68,14 +114,20 @@ impl LogDispatcher {
                             EventKind::Create(_) => reader.reopen(),
                             EventKind::Modify(_) => reader.process(),
                             EventKind::Remove(_) => (),
-                            EventKind::Access(_) => println!("access: {:?}", event),
-                            EventKind::Other => println!("other: {:?}", event),
-                            EventKind::Any => println!("any: {:?}", event),
+                            EventKind::Access(_) => (),
+                            _ => {
+                                warn!(target: LOGNAME, "unexpected event received: {:?}", event)
+                            }
                         }
                     }
                 }
             }
-            Err(e) => println!("watch error: {:?}", e),
+            Err(e) => {
+                error!(
+                    target: LOGNAME,
+                    "an error occured while watching files: {:?}", e
+                );
+            }
         }
     }
 
@@ -122,6 +174,12 @@ impl LogManager<RecommendedWatcher> {
         let filename = filename.into();
         let reader = LogReader::new(filename.clone())?;
 
+        info!(
+            target: LOGNAME,
+            "started watching filename: {}",
+            filename.to_string_lossy()
+        );
+
         self.dispatcher
             .lock()
             .expect("Error acquiring lock on dispatcher")
@@ -140,6 +198,12 @@ impl LogManager<RecommendedWatcher> {
             .expect("Error acquiring lock on dispatcher")
             .remove(filename)?;
         self.watcher.unwatch(filename)?;
+
+        info!(
+            target: LOGNAME,
+            "stopped watching filename: {}",
+            filename.to_string_lossy()
+        );
 
         Ok(())
     }

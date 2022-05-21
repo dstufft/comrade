@@ -11,4 +11,7 @@ pub enum LogWatcherError {
 
     #[error(transparent)]
     IOError(#[from] std::io::Error),
+
+    #[error("invalid file path")]
+    InvalidPath { path: PathBuf },
 }

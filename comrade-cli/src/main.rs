@@ -3,7 +3,6 @@ use std::time::Duration;
 use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::Parser;
-use clap_verbosity_flag::{Verbosity, WarnLevel};
 
 use crate::app::App;
 
@@ -15,9 +14,6 @@ mod ui;
 #[derive(Debug, Parser)]
 #[clap(version)]
 struct Cli {
-    #[clap(flatten)]
-    verbose: Verbosity<WarnLevel>,
-
     #[clap(long, default_value_t = 250)]
     tick_rate: u64,
 
@@ -30,11 +26,15 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let tick_rate = Duration::from_millis(cli.tick_rate);
 
+    // Setup our logger
+    tui_logger::init_logger(log::LevelFilter::Trace)?;
+    tui_logger::set_default_level(log::LevelFilter::Trace);
+
     // Setup our terminal
     let mut term = terminal::setup_terminal()?;
 
     // Actually run our application
-    let mut app = App::new(cli.filename)?;
+    let mut app = App::new("Comrade", cli.filename)?;
     let res = app.run(&mut term, tick_rate);
 
     // Restore terminal back to it's standard state
