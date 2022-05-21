@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use downcast_rs::{impl_downcast, Downcast};
 use indexmap::map::IndexMap;
 
-use comrade::logwatch::{LogManager, RecommendedWatcher};
+use comrade::watcher::{LogManager, RecommendedWatcher};
 
 pub(crate) use crate::app::tabs::DebugTab;
 use crate::errors::{ApplicationError, TerminalError};
