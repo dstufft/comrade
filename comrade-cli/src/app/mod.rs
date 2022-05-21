@@ -160,6 +160,7 @@ impl App {
         if let event::Event::Key(key) = event {
             match (key.modifiers, key.code) {
                 (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.quit(),
+                (KeyModifiers::CONTROL, KeyCode::Char('q')) => self.quit(),
                 (KeyModifiers::CONTROL, KeyCode::Right) => self.tabs.next(),
                 (KeyModifiers::CONTROL, KeyCode::Left) => self.tabs.previous(),
                 _ => {}
