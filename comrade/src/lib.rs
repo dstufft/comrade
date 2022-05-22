@@ -3,7 +3,6 @@ use std::path::Path;
 
 mod config;
 pub mod errors;
-mod parser;
 mod watcher;
 
 pub mod meta {
