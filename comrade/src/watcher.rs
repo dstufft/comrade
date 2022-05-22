@@ -106,7 +106,20 @@ impl LogHandler {
 
     fn process_lines(&mut self) {
         if let Some(ref mut reader) = self.reader {
-            while reader.read_line(&mut self.buffer).unwrap_or(0) > 0 {
+            let log_error = |e| {
+                error!(
+                    target: LOGNAME,
+                    "error reading file; filename: {} error: {}", self.filename_short, e,
+                );
+                e
+            };
+
+            while reader
+                .read_line(&mut self.buffer)
+                .map_err(log_error)
+                .unwrap_or(0)
+                > 0
+            {
                 if log_enabled!(target: RAW_LOGNAME, log::Level::Trace) {
                     let line = self.buffer.trim_end();
                     trace!(
