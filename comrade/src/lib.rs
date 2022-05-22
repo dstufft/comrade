@@ -47,10 +47,11 @@ impl Comrade {
 
     pub fn init(&mut self) -> Result<()> {
         for (id, c) in self.config.characters.iter() {
-            let watcher = watcher::LogWatcher::new(c.filename.clone())?;
-            watcher.set_filter(self.triggers.as_filter()?);
-            self.watchers.insert(id.clone(), watcher);
+            self.watchers
+                .insert(id.clone(), watcher::LogWatcher::new(c.filename.clone())?);
         }
+
+        self.apply_watcher_filters()?;
 
         Ok(())
     }
@@ -84,6 +85,15 @@ impl Comrade {
 
     fn load_triggers(&mut self) -> Result<()> {
         self.triggers = triggers::Triggers::load(self.config.dirs.data.as_path())?;
+        self.apply_watcher_filters()?;
+
+        Ok(())
+    }
+
+    fn apply_watcher_filters(&mut self) -> Result<()> {
+        for watcher in self.watchers.values() {
+            watcher.set_filter(self.triggers.as_filter()?);
+        }
 
         Ok(())
     }
