@@ -4,20 +4,34 @@ use std::io::{BufReader, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use log::{debug, error, info, trace, warn};
+use lazy_static::lazy_static;
+use log::{debug, error, log_enabled, trace, warn};
 use notify::{Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher};
 use parking_lot::Mutex;
+use regex::Regex;
 
 use crate::errors::LogWatcherError;
 
 const LOGNAME: &str = "comrade.watcher";
 const RAW_LOGNAME: &str = "comrade.watcher.raw";
 
+lazy_static! {
+    static ref RAW_LINE_RE: Regex = Regex::new(r"^\[([^]]+)\] (.+?)\r?\n$").unwrap();
+}
+
+#[inline(always)]
+fn parse_raw_line(line: &str) -> Option<(&str, &str)> {
+    RAW_LINE_RE
+        .captures(line)
+        .map(|caps| (caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str()))
+}
+
 struct LogHandler {
     filename: PathBuf,
     filename_short: String,
     reader: Option<BufReader<File>>,
     buffer: String,
+    filter: Box<dyn Fn(&str) -> bool + Send>,
 }
 
 impl LogHandler {
@@ -41,6 +55,7 @@ impl LogHandler {
             filename_short,
             reader: None,
             buffer: String::new(),
+            filter: Box::new(|_line| false),
         };
         lr.reader = lr.open_reader();
 
@@ -84,17 +99,31 @@ impl LogHandler {
 
     fn process_lines(&mut self) {
         if let Some(ref mut reader) = self.reader {
-            while reader.read_line(&mut self.buffer).unwrap() > 0 {
-                let line = self.buffer.trim_end();
-                trace!(
-                    target: RAW_LOGNAME,
-                    "filename: {} line: {}",
-                    self.filename_short,
-                    line
-                );
+            while reader.read_line(&mut self.buffer).unwrap_or(0) > 0 {
+                if log_enabled!(target: RAW_LOGNAME, log::Level::Trace) {
+                    let line = self.buffer.trim_end();
+                    trace!(
+                        target: RAW_LOGNAME,
+                        "filename: {} line: {}",
+                        self.filename_short,
+                        line
+                    );
+                }
+
+                if let Some((_date, line)) = parse_raw_line(self.buffer.as_str()) {
+                    if (self.filter)(line) {
+                        debug!(target: LOGNAME, "matched line: {}", line);
+                        // TODO: Send back to the application to do something with
+                    }
+                }
+
                 self.buffer.clear();
             }
         }
+    }
+
+    fn set_filter(&mut self, filter: Box<dyn Fn(&str) -> bool + Send>) {
+        self.filter = filter;
     }
 }
 
@@ -149,5 +178,9 @@ impl LogWatcher {
 
     pub fn stop(&mut self) {
         self.watcher.unwatch(self.filename.as_path()).unwrap();
+    }
+
+    pub fn set_filter(&self, filter: Box<dyn Fn(&str) -> bool + Send>) {
+        self.handler.lock().set_filter(filter);
     }
 }
