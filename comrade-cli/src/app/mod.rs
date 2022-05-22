@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossterm::event;
@@ -6,7 +8,7 @@ use downcast_rs::{impl_downcast, Downcast};
 use indexmap::map::IndexMap;
 
 use comrade::config::Config;
-use comrade::watcher::{LogManager, RecommendedWatcher};
+use comrade::watcher::LogWatcher;
 
 pub(crate) use crate::app::tabs::{ConfigTab, DebugTab, LogsTab};
 use crate::errors::{ApplicationError, TerminalError};
@@ -83,24 +85,27 @@ impl Tabs {
 pub(crate) struct App {
     title: String,
     finished: bool,
-    config: Config,
-    manager: LogManager<RecommendedWatcher>,
+    watchers: HashMap<PathBuf, LogWatcher>,
     tabs: Tabs,
 }
 
 impl App {
-    pub(crate) fn new<T: Into<String>>(title: T, config: Config) -> Result<App> {
-        Ok(App {
+    pub(crate) fn new<T: Into<String>>(title: T, config: Config) -> App {
+        let mut watchers = HashMap::new();
+        for c in config.characters.iter() {
+            watchers.insert(c.filename.clone(), LogWatcher::new(c.filename.clone()));
+        }
+
+        App {
             title: title.into(),
             finished: false,
-            config,
-            manager: LogManager::new()?,
+            watchers,
             tabs: Tabs::new(vec![
                 ConfigTab::init("Config"),
                 LogsTab::init("Logs"),
                 DebugTab::init("Debug"),
             ]),
-        })
+        }
     }
 
     pub(crate) fn run(&mut self, term: &mut ComradeTerminal, tick_rate: Duration) -> Result<()> {
@@ -146,16 +151,16 @@ impl App {
     }
 
     fn on_start(&mut self) -> Result<()> {
-        for character in self.config.characters.iter() {
-            self.manager.add(&character.filename)?;
+        for watcher in self.watchers.values_mut() {
+            watcher.start();
         }
 
         Ok(())
     }
 
     fn on_end(&mut self) -> Result<()> {
-        for character in self.config.characters.iter() {
-            self.manager.remove(&character.filename)?;
+        for watcher in self.watchers.values_mut() {
+            watcher.stop();
         }
 
         Ok(())

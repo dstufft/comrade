@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         };
 
         // Actually run our application
-        let mut app = App::new(meta::PKG_NAME_DISPLAY, config)?;
+        let mut app = App::new(meta::PKG_NAME_DISPLAY, config);
         let res = app.run(&mut term, tick_rate);
 
         res.map_err(From::from)

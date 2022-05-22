@@ -1,52 +1,51 @@
-use std::collections::hash_map;
-use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::io::prelude::*;
+use std::io::{BufReader, SeekFrom};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use log::{debug, error, info, trace, warn};
-pub use notify::RecommendedWatcher;
-use notify::{Event, EventKind, RecursiveMode, Watcher};
+use notify::{Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher};
+use parking_lot::Mutex;
 
 use crate::errors::LogWatcherError;
 
 const LOGNAME: &str = "comrade.watcher";
 const RAW_LOGNAME: &str = "comrade.watcher.raw";
 
-type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
-
-#[derive(Debug)]
-struct LogReader {
+struct LogHandler {
     filename: PathBuf,
     filename_short: String,
     reader: Option<BufReader<File>>,
     buffer: String,
 }
 
-impl LogReader {
-    fn new<P: Into<PathBuf>>(filename: P) -> Result<LogReader> {
+impl LogHandler {
+    fn new<P: Into<PathBuf>>(filename: P) -> LogHandler {
         let filename = filename.into();
         let filename_short = filename
             .file_name()
             .ok_or_else(|| LogWatcherError::InvalidPath {
                 path: filename.clone(),
-            })?
+            })
+            .unwrap()
             .to_str()
             .ok_or_else(|| LogWatcherError::InvalidPath {
                 path: filename.clone(),
-            })?
+            })
+            .unwrap()
             .to_string();
-        let mut lr = LogReader {
+
+        let mut lr = LogHandler {
             filename,
             filename_short,
             reader: None,
             buffer: String::new(),
         };
+        lr.reader = lr.open_reader();
 
-        lr.reopen();
         if let Some(ref mut reader) = lr.reader {
-            reader.seek(SeekFrom::End(0))?;
+            reader.seek(SeekFrom::End(0)).unwrap();
             trace!(
                 target: LOGNAME,
                 "seeked to end of file: {}",
@@ -54,26 +53,11 @@ impl LogReader {
             )
         }
 
-        Ok(lr)
+        lr
     }
 
-    fn process(&mut self) {
-        if let Some(ref mut reader) = self.reader {
-            while reader.read_line(&mut self.buffer).unwrap() > 0 {
-                let line = self.buffer.trim_end();
-                trace!(
-                    target: RAW_LOGNAME,
-                    "filename: {} line: {}",
-                    self.filename_short,
-                    line
-                );
-                self.buffer.clear();
-            }
-        }
-    }
-
-    fn reopen(&mut self) {
-        self.reader = match File::open(self.filename.as_path()) {
+    fn open_reader(&mut self) -> Option<BufReader<File>> {
+        match File::open(self.filename.as_path()) {
             Ok(file) => {
                 debug!(
                     target: LOGNAME,
@@ -93,35 +77,39 @@ impl LogReader {
             }
         }
     }
-}
 
-struct LogDispatcher {
-    readers: HashMap<PathBuf, LogReader>,
-}
-
-impl LogDispatcher {
-    fn new() -> LogDispatcher {
-        let readers = HashMap::new();
-        LogDispatcher { readers }
+    fn reopen_reader(&mut self) {
+        self.reader = self.open_reader();
     }
 
-    fn handle_event(&mut self, res: notify::Result<Event>) {
-        match res {
-            Ok(event) => {
-                for path in &event.paths {
-                    if let Some(reader) = self.readers.get_mut(path) {
-                        match event.kind {
-                            EventKind::Create(_) => reader.reopen(),
-                            EventKind::Modify(_) => reader.process(),
-                            EventKind::Remove(_) => (),
-                            EventKind::Access(_) => (),
-                            _ => {
-                                warn!(target: LOGNAME, "unexpected event received: {:?}", event)
-                            }
-                        }
-                    }
-                }
+    fn process_lines(&mut self) {
+        if let Some(ref mut reader) = self.reader {
+            while reader.read_line(&mut self.buffer).unwrap() > 0 {
+                let line = self.buffer.trim_end();
+                trace!(
+                    target: RAW_LOGNAME,
+                    "filename: {} line: {}",
+                    self.filename_short,
+                    line
+                );
+                self.buffer.clear();
             }
+        }
+    }
+}
+
+impl EventHandler for LogHandler {
+    fn handle_event(&mut self, res: Result<Event>) {
+        match res {
+            Ok(event) => match event.kind {
+                EventKind::Create(_) => self.reopen_reader(),
+                EventKind::Modify(_) => self.process_lines(),
+                EventKind::Remove(_) => (),
+                EventKind::Access(_) => (),
+                _ => {
+                    warn!(target: LOGNAME, "unexpected event received: {:?}", event)
+                }
+            },
             Err(e) => {
                 error!(
                     target: LOGNAME,
@@ -130,81 +118,36 @@ impl LogDispatcher {
             }
         }
     }
+}
 
-    fn add<P: Into<PathBuf>>(&mut self, filename: P, reader: LogReader) -> Result<()> {
-        match self.readers.entry(filename.into()) {
-            hash_map::Entry::Vacant(e) => {
-                e.insert(reader);
-                Ok(())
-            }
-            hash_map::Entry::Occupied(e) => Err(LogWatcherError::AlreadyWatching {
-                path: e.key().to_owned(),
-            }),
+pub struct LogWatcher {
+    filename: PathBuf,
+    handler: Arc<Mutex<LogHandler>>,
+    watcher: RecommendedWatcher,
+}
+
+impl LogWatcher {
+    pub fn new<P: Into<PathBuf>>(filename: P) -> LogWatcher {
+        let filename = filename.into();
+        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path())));
+        let handler_ = handler.clone();
+        let watcher =
+            notify::recommended_watcher(move |res| handler_.lock().handle_event(res)).unwrap();
+
+        LogWatcher {
+            filename,
+            handler,
+            watcher,
         }
     }
 
-    fn remove<P: AsRef<Path>>(&mut self, filename: P) -> Result<()> {
-        self.readers.remove(filename.as_ref());
-        Ok(())
-    }
-}
-
-pub struct LogManager<W: Watcher> {
-    dispatcher: Arc<Mutex<LogDispatcher>>,
-    watcher: W,
-}
-
-impl LogManager<RecommendedWatcher> {
-    pub fn new() -> Result<Self> {
-        let dispatcher = Arc::new(Mutex::new(LogDispatcher::new()));
-        let wdispatcher = dispatcher.clone();
-        let watcher = notify::recommended_watcher(move |res| {
-            let mut d = wdispatcher
-                .lock()
-                .expect("Error acquiring lock on dispatcher");
-            d.handle_event(res);
-        })?;
-        Ok(LogManager {
-            dispatcher,
-            watcher,
-        })
-    }
-
-    pub fn add<P: Into<PathBuf>>(&mut self, filename: P) -> Result<()> {
-        let filename = filename.into();
-        let reader = LogReader::new(filename.clone())?;
-
-        info!(
-            target: LOGNAME,
-            "started watching filename: {}",
-            filename.to_string_lossy()
-        );
-
-        self.dispatcher
-            .lock()
-            .expect("Error acquiring lock on dispatcher")
-            .add(filename.clone(), reader)?;
+    pub fn start(&mut self) {
         self.watcher
-            .watch(filename.as_ref(), RecursiveMode::NonRecursive)?;
-
-        Ok(())
+            .watch(self.filename.as_path(), RecursiveMode::NonRecursive)
+            .unwrap();
     }
 
-    pub fn remove<P: AsRef<Path>>(&mut self, filename: P) -> Result<()> {
-        let filename = filename.as_ref();
-
-        self.dispatcher
-            .lock()
-            .expect("Error acquiring lock on dispatcher")
-            .remove(filename)?;
-        self.watcher.unwatch(filename)?;
-
-        info!(
-            target: LOGNAME,
-            "stopped watching filename: {}",
-            filename.to_string_lossy()
-        );
-
-        Ok(())
+    pub fn stop(&mut self) {
+        self.watcher.unwatch(self.filename.as_path()).unwrap();
     }
 }
