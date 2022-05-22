@@ -10,7 +10,7 @@ use clap::Parser;
 use path_clean::PathClean;
 
 use comrade::meta;
-use comrade::Comrade;
+use comrade::{Comrade, LoadOptions};
 
 use crate::app::App;
 
@@ -55,8 +55,13 @@ fn main() -> Result<()> {
         // Setup Comrade
         let mut comrade = Comrade::new();
         comrade
-            .load(config_dir.clone())
+            .load(LoadOptions::Config {
+                config_dir: config_dir.clone(),
+            })
             .with_context(|| format!("failed to read configuration from {:?}", config_dir))?;
+        comrade
+            .load(LoadOptions::Triggers)
+            .context("failed to load triggers")?;
 
         // Actually run our application
         let mut app = App::new(meta::PKG_NAME_DISPLAY, comrade);

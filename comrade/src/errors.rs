@@ -26,9 +26,27 @@ pub enum ConfigError {
 }
 
 #[derive(Error, Debug)]
+pub enum TriggerError {
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+
+    #[error("could not parse triggers")]
+    DeserializationError {
+        source: toml_edit::de::Error,
+        filename: PathBuf,
+    },
+
+    #[error("invalid regex")]
+    InvalidRegex(#[from] regex::Error),
+}
+
+#[derive(Error, Debug)]
 pub enum ComradeError {
     #[error(transparent)]
     ConfigError(#[from] ConfigError),
+
+    #[error(transparent)]
+    TriggerError(#[from] TriggerError),
 
     #[error(transparent)]
     LogWatcherError(#[from] LogWatcherError),

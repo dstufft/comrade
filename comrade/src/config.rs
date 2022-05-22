@@ -10,9 +10,9 @@ use serde::Deserialize;
 use crate::errors::ConfigError;
 use crate::meta;
 
-type Result<T, E = ConfigError> = core::result::Result<T, E>;
-
 const CONFIG_FILENAME: &str = "Config.toml";
+
+type Result<T, E = ConfigError> = core::result::Result<T, E>;
 
 fn default_dirs() -> AppDirs {
     AppDirs::new(Some(meta::PKG_NAME_DISPLAY), false)
@@ -23,6 +23,7 @@ fn default_dirs() -> AppDirs {
 pub struct Directories {
     #[serde(skip)]
     pub config: PathBuf,
+    pub data: PathBuf,
 }
 
 impl Default for Directories {
@@ -31,6 +32,7 @@ impl Default for Directories {
 
         Directories {
             config: dirs.config_dir,
+            data: dirs.data_dir,
         }
     }
 }
@@ -53,7 +55,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_default_dir() -> Result<Config> {
-        match try_open_config_file(default_dirs().config_dir, true)? {
+        match try_open_config_file(default_dirs().config_dir.as_path(), true)? {
             Some(file) => parse_config(file),
             None => Ok(Config {
                 dirs: Directories::default(),
@@ -62,12 +64,12 @@ impl Config {
         }
     }
 
-    pub fn from_config_dir<P: AsRef<Path>>(path: P) -> Result<Config> {
-        let file = try_open_config_file(&path, false)?
+    pub fn from_config_dir(path: PathBuf) -> Result<Config> {
+        let file = try_open_config_file(path.as_path(), false)?
             .expect("None from try_open_config_file with allow_missing=false?");
         let mut config = parse_config(file)?;
 
-        config.dirs.config = path.as_ref().to_path_buf();
+        config.dirs.config = path;
 
         Ok(config)
     }
@@ -79,8 +81,7 @@ fn parse_config(mut file: fs::File) -> Result<Config> {
     Ok(toml_edit::de::from_str(buffer.as_str())?)
 }
 
-fn try_open_config_file<P: AsRef<Path>>(path: P, allow_missing: bool) -> Result<Option<fs::File>> {
-    let path = path.as_ref();
+fn try_open_config_file(path: &Path, allow_missing: bool) -> Result<Option<fs::File>> {
     let file = fs::OpenOptions::new()
         .read(true)
         .open(path.join(CONFIG_FILENAME));
