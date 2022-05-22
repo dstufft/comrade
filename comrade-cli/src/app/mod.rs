@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossterm::event;
@@ -7,8 +5,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use downcast_rs::{impl_downcast, Downcast};
 use indexmap::map::IndexMap;
 
-use comrade::config::Config;
-use comrade::watcher::LogWatcher;
+use comrade::Comrade;
 
 pub(crate) use crate::app::tabs::{ConfigTab, DebugTab, LogsTab};
 use crate::errors::{ApplicationError, TerminalError};
@@ -85,26 +82,21 @@ impl Tabs {
 pub(crate) struct App {
     title: String,
     finished: bool,
-    watchers: HashMap<PathBuf, LogWatcher>,
     tabs: Tabs,
+    comrade: Comrade,
 }
 
 impl App {
-    pub(crate) fn new<T: Into<String>>(title: T, config: Config) -> App {
-        let mut watchers = HashMap::new();
-        for c in config.characters.iter() {
-            watchers.insert(c.filename.clone(), LogWatcher::new(c.filename.clone()));
-        }
-
+    pub(crate) fn new<T: Into<String>>(title: T, comrade: Comrade) -> App {
         App {
             title: title.into(),
             finished: false,
-            watchers,
             tabs: Tabs::new(vec![
                 ConfigTab::init("Config"),
                 LogsTab::init("Logs"),
                 DebugTab::init("Debug"),
             ]),
+            comrade,
         }
     }
 
@@ -151,17 +143,14 @@ impl App {
     }
 
     fn on_start(&mut self) -> Result<()> {
-        for watcher in self.watchers.values_mut() {
-            watcher.start();
-        }
+        self.comrade.init();
+        self.comrade.start();
 
         Ok(())
     }
 
     fn on_end(&mut self) -> Result<()> {
-        for watcher in self.watchers.values_mut() {
-            watcher.stop();
-        }
+        self.comrade.stop();
 
         Ok(())
     }

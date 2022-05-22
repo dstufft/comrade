@@ -24,3 +24,9 @@ pub enum ConfigError {
     #[error("could not parse configuration")]
     DeserializationError(#[from] toml_edit::de::Error),
 }
+
+#[derive(Error, Debug)]
+pub enum ComradeError {
+    #[error(transparent)]
+    ConfigError(#[from] ConfigError),
+}

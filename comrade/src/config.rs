@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
@@ -41,13 +42,13 @@ pub struct Character {
     pub filename: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Config {
     #[serde(default)]
     pub dirs: Directories,
 
     #[serde(default)]
-    pub characters: Vec<Character>,
+    pub characters: HashMap<String, Character>,
 }
 
 impl Config {
@@ -56,7 +57,7 @@ impl Config {
             Some(file) => parse_config(file),
             None => Ok(Config {
                 dirs: Directories::default(),
-                characters: Vec::new(),
+                characters: HashMap::new(),
             }),
         }
     }

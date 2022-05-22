@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use path_clean::PathClean;
 
-use comrade::config::Config;
 use comrade::meta;
+use comrade::Comrade;
 
 use crate::app::App;
 
@@ -44,19 +44,20 @@ fn main() -> Result<()> {
     let res = (|| -> Result<()> {
         let tick_rate = Duration::from_millis(cli.tick_rate);
 
-        // Load our configuration
-        let config = match cli.config_dir {
-            Some(p) => {
-                let path = absolute_path(p)?;
-                Config::from_config_dir(&path).with_context(|| {
-                    format!("Failed to read configuration from {}", path.display())
-                })?
-            }
-            None => Config::from_default_dir()?,
+        // Get our configuration directory
+        let config_dir = match cli.config_dir {
+            Some(path) => Some(absolute_path(path)?),
+            None => None,
         };
 
+        // Setup Comrade
+        let mut comrade = Comrade::new();
+        comrade
+            .load(config_dir.clone())
+            .with_context(|| format!("failed to read configuration from {:?}", config_dir))?;
+
         // Actually run our application
-        let mut app = App::new(meta::PKG_NAME_DISPLAY, config);
+        let mut app = App::new(meta::PKG_NAME_DISPLAY, comrade);
         let res = app.run(&mut term, tick_rate);
 
         res.map_err(From::from)
