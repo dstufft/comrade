@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use lazy_static::lazy_static;
 use log::{debug, error, log_enabled, trace, warn};
-use notify::{Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher};
+use notify::{Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 use regex::Regex;
 
@@ -19,11 +19,20 @@ lazy_static! {
     static ref RAW_LINE_RE: Regex = Regex::new(r"^\[([^]]+)\] (.+?)\r?\n$").unwrap();
 }
 
+type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
+
 #[inline(always)]
 fn parse_raw_line(line: &str) -> Option<(&str, &str)> {
-    RAW_LINE_RE
-        .captures(line)
-        .map(|caps| (caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str()))
+    RAW_LINE_RE.captures(line).map(|caps| {
+        (
+            caps.get(1)
+                .expect("regex somehow matched without mandatory date capture")
+                .as_str(),
+            caps.get(2)
+                .expect("regex somehow matched without mandatory line capture")
+                .as_str(),
+        )
+    })
 }
 
 struct LogHandler {
@@ -35,19 +44,17 @@ struct LogHandler {
 }
 
 impl LogHandler {
-    fn new<P: Into<PathBuf>>(filename: P) -> LogHandler {
+    fn new<P: Into<PathBuf>>(filename: P) -> Result<LogHandler> {
         let filename = filename.into();
         let filename_short = filename
             .file_name()
             .ok_or_else(|| LogWatcherError::InvalidPath {
                 path: filename.clone(),
-            })
-            .unwrap()
+            })?
             .to_str()
             .ok_or_else(|| LogWatcherError::InvalidPath {
                 path: filename.clone(),
-            })
-            .unwrap()
+            })?
             .to_string();
 
         let mut lr = LogHandler {
@@ -60,7 +67,7 @@ impl LogHandler {
         lr.reader = lr.open_reader();
 
         if let Some(ref mut reader) = lr.reader {
-            reader.seek(SeekFrom::End(0)).unwrap();
+            reader.seek(SeekFrom::End(0))?;
             trace!(
                 target: LOGNAME,
                 "seeked to end of file: {}",
@@ -68,7 +75,7 @@ impl LogHandler {
             )
         }
 
-        lr
+        Ok(lr)
     }
 
     fn open_reader(&mut self) -> Option<BufReader<File>> {
@@ -128,7 +135,7 @@ impl LogHandler {
 }
 
 impl EventHandler for LogHandler {
-    fn handle_event(&mut self, res: Result<Event>) {
+    fn handle_event(&mut self, res: notify::Result<Event>) {
         match res {
             Ok(event) => match event.kind {
                 EventKind::Create(_) => self.reopen_reader(),
@@ -156,28 +163,28 @@ pub struct LogWatcher {
 }
 
 impl LogWatcher {
-    pub fn new<P: Into<PathBuf>>(filename: P) -> LogWatcher {
+    pub fn new<P: Into<PathBuf>>(filename: P) -> Result<LogWatcher> {
         let filename = filename.into();
-        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path())));
+        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path())?));
         let handler_ = handler.clone();
-        let watcher =
-            notify::recommended_watcher(move |res| handler_.lock().handle_event(res)).unwrap();
+        let watcher = notify::recommended_watcher(move |res| handler_.lock().handle_event(res))?;
 
-        LogWatcher {
+        Ok(LogWatcher {
             filename,
             handler,
             watcher,
-        }
+        })
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> Result<()> {
         self.watcher
-            .watch(self.filename.as_path(), RecursiveMode::NonRecursive)
-            .unwrap();
+            .watch(self.filename.as_path(), RecursiveMode::NonRecursive)?;
+        Ok(())
     }
 
-    pub fn stop(&mut self) {
-        self.watcher.unwatch(self.filename.as_path()).unwrap();
+    pub fn stop(&mut self) -> Result<()> {
+        self.watcher.unwatch(self.filename.as_path())?;
+        Ok(())
     }
 
     pub fn set_filter(&self, filter: Box<dyn Fn(&str) -> bool + Send>) {

@@ -143,14 +143,14 @@ impl App {
     }
 
     fn on_start(&mut self) -> Result<()> {
-        self.comrade.init();
-        self.comrade.start();
+        self.comrade.init()?;
+        self.comrade.start()?;
 
         Ok(())
     }
 
     fn on_end(&mut self) -> Result<()> {
-        self.comrade.stop();
+        self.comrade.stop()?;
 
         Ok(())
     }

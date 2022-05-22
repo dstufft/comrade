@@ -13,8 +13,5 @@ pub(crate) enum ApplicationError {
     TerminalError(#[from] TerminalError),
 
     #[error(transparent)]
-    LogWatcherError(#[from] comrade::errors::LogWatcherError),
-
-    #[error(transparent)]
-    ConfigError(#[from] comrade::errors::ConfigError),
+    ComradeError(#[from] comrade::errors::ComradeError),
 }

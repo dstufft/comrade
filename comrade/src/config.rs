@@ -63,7 +63,8 @@ impl Config {
     }
 
     pub fn from_config_dir<P: AsRef<Path>>(path: P) -> Result<Config> {
-        let file = try_open_config_file(&path, false)?.unwrap();
+        let file = try_open_config_file(&path, false)?
+            .expect("None from try_open_config_file with allow_missing=false?");
         let mut config = parse_config(file)?;
 
         config.dirs.config = path.as_ref().to_path_buf();

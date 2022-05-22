@@ -29,4 +29,7 @@ pub enum ConfigError {
 pub enum ComradeError {
     #[error(transparent)]
     ConfigError(#[from] ConfigError),
+
+    #[error(transparent)]
+    LogWatcherError(#[from] LogWatcherError),
 }

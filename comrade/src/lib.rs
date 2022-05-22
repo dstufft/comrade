@@ -34,23 +34,29 @@ impl Comrade {
         Ok(())
     }
 
-    pub fn init(&mut self) {
+    pub fn init(&mut self) -> Result<()> {
         for (id, c) in self.config.characters.iter() {
             self.watchers
-                .insert(id.clone(), watcher::LogWatcher::new(c.filename.clone()));
+                .insert(id.clone(), watcher::LogWatcher::new(c.filename.clone())?);
         }
+
+        Ok(())
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> Result<()> {
         for watcher in self.watchers.values_mut() {
-            watcher.start();
+            watcher.start()?;
         }
+
+        Ok(())
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&mut self) -> Result<()> {
         for watcher in self.watchers.values_mut() {
-            watcher.stop();
+            watcher.stop()?;
         }
+
+        Ok(())
     }
 }
 
