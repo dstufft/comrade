@@ -44,7 +44,7 @@ pub struct Character {
 #[derive(Deserialize, Debug)]
 pub struct Config {
     #[serde(default)]
-    pub directories: Directories,
+    pub dirs: Directories,
 
     #[serde(default)]
     pub characters: Vec<Character>,
@@ -55,7 +55,7 @@ impl Config {
         match try_open_config_file(default_dirs().config_dir, true)? {
             Some(file) => parse_config(file),
             None => Ok(Config {
-                directories: Directories::default(),
+                dirs: Directories::default(),
                 characters: Vec::new(),
             }),
         }
@@ -65,7 +65,7 @@ impl Config {
         let file = try_open_config_file(&path, false)?.unwrap();
         let mut config = parse_config(file)?;
 
-        config.directories.config = path.as_ref().to_path_buf();
+        config.dirs.config = path.as_ref().to_path_buf();
 
         Ok(config)
     }
