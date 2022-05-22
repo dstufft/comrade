@@ -1,3 +1,5 @@
+#![warn(clippy::disallowed_types)]
+
 use std::env;
 use std::io;
 use std::path::{Path, PathBuf};

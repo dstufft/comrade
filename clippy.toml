@@ -1,0 +1,6 @@
+disallowed-types = [
+    # We don't allow the use of the std::sync::{Mutex, RwLock}
+    # types because parking_lot is generally a better implementation.
+    "std::sync::Mutex",
+    "std::sync::RwLock",
+]
