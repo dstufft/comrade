@@ -192,7 +192,7 @@ pub(crate) struct LogWatcher {
     filename: PathBuf,
     handler: Arc<Mutex<LogHandler>>,
     watcher: RecommendedWatcher,
-    receiver: Receiver<(NaiveDateTime, String)>,
+    _receiver: Receiver<(NaiveDateTime, String)>,
 }
 
 impl LogWatcher {
@@ -206,7 +206,7 @@ impl LogWatcher {
             filename,
             handler,
             watcher,
-            receiver,
+            _receiver: receiver,
         })
     }
 
