@@ -188,7 +188,7 @@ impl EventHandler for LogHandler {
     }
 }
 
-pub(crate) struct LogWatcher {
+struct LogWatcher {
     filename: PathBuf,
     handler: Arc<Mutex<LogHandler>>,
     watcher: RecommendedWatcher,
@@ -196,7 +196,7 @@ pub(crate) struct LogWatcher {
 }
 
 impl LogWatcher {
-    pub(crate) fn new(filename: PathBuf) -> Result<LogWatcher> {
+    fn new(filename: PathBuf) -> Result<LogWatcher> {
         let (sender, receiver) = bounded(1000);
         let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path(), sender)?));
         let handler_ = handler.clone();
@@ -210,18 +210,18 @@ impl LogWatcher {
         })
     }
 
-    pub(crate) fn start(&mut self) -> Result<()> {
+    fn start(&mut self) -> Result<()> {
         self.watcher
             .watch(self.filename.as_path(), RecursiveMode::NonRecursive)?;
         Ok(())
     }
 
-    pub(crate) fn stop(&mut self) -> Result<()> {
+    fn stop(&mut self) -> Result<()> {
         self.watcher.unwatch(self.filename.as_path())?;
         Ok(())
     }
 
-    pub(crate) fn set_filter(&self, filter: Box<dyn Fn(&str) -> bool + Send>) {
+    fn set_filter(&self, filter: Box<dyn Fn(&str) -> bool + Send>) {
         self.handler.lock().set_filter(filter);
     }
 }
@@ -232,8 +232,10 @@ pub(crate) struct Watchers {
 }
 
 impl Watchers {
-    pub(crate) fn add(&mut self, id: String, filename: PathBuf) -> Result<Option<LogWatcher>> {
-        Ok(self.watchers.insert(id, LogWatcher::new(filename)?))
+    pub(crate) fn add(&mut self, id: String, filename: PathBuf) -> Result<()> {
+        self.watchers.insert(id, LogWatcher::new(filename)?);
+
+        Ok(())
     }
 
     pub(crate) fn start(&mut self) -> Result<()> {
