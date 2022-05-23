@@ -46,6 +46,10 @@ impl Default for Directories {
     }
 }
 
+#[derive(Deserialize, Debug, Default, PartialEq, Eq, Hash, Clone)]
+#[serde(transparent)]
+pub(crate) struct CharacterId(String);
+
 #[derive(Deserialize, Debug)]
 pub(crate) struct Character {
     #[serde(rename = "name")]
@@ -61,7 +65,7 @@ pub(crate) struct Config {
     pub(crate) dirs: Directories,
 
     #[serde(default)]
-    pub(crate) characters: HashMap<String, Character>,
+    pub(crate) characters: HashMap<CharacterId, Character>,
 
     #[serde(skip)]
     pub(crate) triggers: Triggers,

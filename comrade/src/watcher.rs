@@ -13,6 +13,7 @@ use notify::{Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, 
 use parking_lot::Mutex;
 use regex::Regex;
 
+use crate::config::CharacterId;
 use crate::errors::LogWatcherError;
 
 lazy_static! {
@@ -26,7 +27,7 @@ pub(crate) type LogReceiver = Receiver<Arc<LogEvent>>;
 
 #[derive(Debug)]
 pub(crate) struct LogEvent {
-    pub(crate) id: String,
+    pub(crate) id: Arc<CharacterId>,
     pub(crate) date: NaiveDateTime,
     pub(crate) message: String,
 }
@@ -46,7 +47,7 @@ fn parse_raw_line(line: &str) -> Option<(&str, &str)> {
 }
 
 struct LogHandler {
-    id: String,
+    id: Arc<CharacterId>,
     filename: PathBuf,
     filename_short: String,
     reader: Option<BufReader<File>>,
@@ -56,7 +57,11 @@ struct LogHandler {
 }
 
 impl LogHandler {
-    fn new<P: Into<PathBuf>>(filename: P, id: String, sender: LogSender) -> Result<LogHandler> {
+    fn new<P: Into<PathBuf>>(
+        filename: P,
+        id: Arc<CharacterId>,
+        sender: LogSender,
+    ) -> Result<LogHandler> {
         let filename = filename.into();
         let filename_short = filename
             .file_name()
@@ -190,7 +195,7 @@ struct LogWatcher {
 }
 
 impl LogWatcher {
-    fn new(filename: PathBuf, id: String, sender: LogSender) -> Result<LogWatcher> {
+    fn new(filename: PathBuf, id: Arc<CharacterId>, sender: LogSender) -> Result<LogWatcher> {
         let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path(), id, sender)?));
         let handler_ = handler.clone();
         let watcher = notify::recommended_watcher(move |res| handler_.lock().handle_event(res))?;
@@ -219,7 +224,7 @@ impl LogWatcher {
 }
 
 pub(crate) struct Watchers {
-    watchers: HashMap<String, LogWatcher>,
+    watchers: HashMap<CharacterId, LogWatcher>,
     sender: LogSender,
     receiver: LogReceiver,
 }
@@ -237,10 +242,10 @@ impl Default for Watchers {
 }
 
 impl Watchers {
-    pub(crate) fn add(&mut self, id: String, filename: PathBuf) -> Result<()> {
+    pub(crate) fn add(&mut self, id: CharacterId, filename: PathBuf) -> Result<()> {
         self.watchers.insert(
             id.clone(),
-            LogWatcher::new(filename, id, self.sender.clone())?,
+            LogWatcher::new(filename, Arc::new(id), self.sender.clone())?,
         );
 
         Ok(())
@@ -262,7 +267,7 @@ impl Watchers {
         Ok(())
     }
 
-    pub(crate) fn set_filter(&self, id: &str, filter: Box<dyn Fn(&str) -> bool + Send>) {
+    pub(crate) fn set_filter(&self, id: &CharacterId, filter: Box<dyn Fn(&str) -> bool + Send>) {
         if let Some(watcher) = self.watchers.get(id) {
             watcher.set_filter(filter)
         }

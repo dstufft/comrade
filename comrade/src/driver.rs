@@ -107,7 +107,7 @@ impl DriverThread {
 
         // If we don't know this character, then it's probably been removed
         // since this event was sent.
-        if let Some(_character) = config.characters.get(matched.id.as_str()) {
+        if let Some(_character) = config.characters.get(&*matched.id) {
             // TODO: Could we do something smart here, and modify our filter so that
             //       instead of returning a bool, it returns the matched triggers and
             //       then only try those? The biggest issue with that, is technically
