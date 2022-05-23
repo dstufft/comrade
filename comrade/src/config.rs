@@ -20,10 +20,10 @@ fn default_dirs() -> AppDirs {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Directories {
+pub(crate) struct Directories {
     #[serde(skip)]
-    pub config: PathBuf,
-    pub data: PathBuf,
+    pub(crate) config: PathBuf,
+    pub(crate) data: PathBuf,
 }
 
 impl Default for Directories {
@@ -38,23 +38,25 @@ impl Default for Directories {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Character {
-    pub name: String,
-    pub server: String,
-    pub filename: PathBuf,
+pub(crate) struct Character {
+    #[serde(rename = "name")]
+    pub(crate) _name: String,
+    #[serde(rename = "server")]
+    pub(crate) _server: String,
+    pub(crate) filename: PathBuf,
 }
 
 #[derive(Deserialize, Debug, Default)]
-pub struct Config {
+pub(crate) struct Config {
     #[serde(default)]
-    pub dirs: Directories,
+    pub(crate) dirs: Directories,
 
     #[serde(default)]
-    pub characters: HashMap<String, Character>,
+    pub(crate) characters: HashMap<String, Character>,
 }
 
 impl Config {
-    pub fn from_default_dir() -> Result<Config> {
+    pub(crate) fn from_default_dir() -> Result<Config> {
         match try_open_config_file(default_dirs().config_dir.as_path(), true)? {
             Some(file) => parse_config(file),
             None => Ok(Config {
@@ -64,7 +66,7 @@ impl Config {
         }
     }
 
-    pub fn from_config_dir(path: PathBuf) -> Result<Config> {
+    pub(crate) fn from_config_dir(path: PathBuf) -> Result<Config> {
         let file = try_open_config_file(path.as_path(), false)?
             .expect("None from try_open_config_file with allow_missing=false?");
         let mut config = parse_config(file)?;

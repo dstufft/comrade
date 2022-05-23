@@ -15,34 +15,35 @@ const TRIGGER_FILENAME: &str = "Triggers.toml";
 type Result<T, E = TriggerError> = core::result::Result<T, E>;
 
 #[derive(Debug, Deserialize)]
-pub struct Trigger {
-    pub name: String,
-    #[serde(default)]
-    pub comment: String,
-    pub search_text: String,
+pub(crate) struct Trigger {
+    #[serde(rename = "name")]
+    pub(crate) _name: String,
+    #[serde(default, rename = "comment")]
+    pub(crate) _comment: String,
+    pub(crate) search_text: String,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Clone)]
-pub enum TriggerSource {
+pub(crate) enum TriggerSource {
     Local,
     Remote(String),
 }
 
 #[derive(Debug, Deserialize)]
-pub struct TriggerMeta {
-    pub source: TriggerSource,
+pub(crate) struct TriggerMeta {
+    pub(crate) source: TriggerSource,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct TriggerSet {
-    pub meta: TriggerMeta,
+pub(crate) struct TriggerSet {
+    pub(crate) meta: TriggerMeta,
 
     #[serde(default)]
-    pub triggers: BTreeMap<String, Trigger>,
+    pub(crate) triggers: BTreeMap<String, Trigger>,
 }
 
 #[derive(Default)]
-pub struct Triggers {
+pub(crate) struct Triggers {
     triggers: BTreeMap<TriggerSource, TriggerSet>,
 }
 
