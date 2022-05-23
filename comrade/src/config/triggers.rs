@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
+use std::time::Duration;
 
 use log::{debug, error};
 use regex::RegexSet;
 use serde::Deserialize;
+use serde_with::{serde_as, DurationSeconds};
 
 use crate::config::Result as ConfigResult;
 use crate::errors::{ConfigError, TriggerError};
@@ -15,10 +17,16 @@ const TRIGGER_FILENAME: &str = "Triggers.toml";
 
 type Result<T, E = TriggerError> = core::result::Result<T, E>;
 
+#[serde_as]
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub(crate) enum Action {
-    DisplayText { text: String },
+    DisplayText {
+        text: String,
+        #[serde_as(as = "Option<DurationSeconds<u64>>")]
+        #[serde(default)]
+        delay: Option<Duration>,
+    },
 }
 
 #[derive(Debug, Deserialize, Clone)]
