@@ -5,6 +5,8 @@ use std::io::{BufReader, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use chrono::{Local, NaiveDateTime};
+use crossbeam_channel::{bounded, Receiver, Sender};
 use lazy_static::lazy_static;
 use log::{debug, error, log_enabled, trace, warn};
 use notify::{Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -42,10 +44,14 @@ struct LogHandler {
     reader: Option<BufReader<File>>,
     buffer: String,
     filter: Box<dyn Fn(&str) -> bool + Send>,
+    sender: Sender<(NaiveDateTime, String)>,
 }
 
 impl LogHandler {
-    fn new<P: Into<PathBuf>>(filename: P) -> Result<LogHandler> {
+    fn new<P: Into<PathBuf>>(
+        filename: P,
+        sender: Sender<(NaiveDateTime, String)>,
+    ) -> Result<LogHandler> {
         let filename = filename.into();
         let filename_short = filename
             .file_name()
@@ -64,6 +70,7 @@ impl LogHandler {
             reader: None,
             buffer: String::new(),
             filter: Box::new(|_line| false),
+            sender,
         };
         lr.reader = lr.open_reader();
 
@@ -131,10 +138,21 @@ impl LogHandler {
                     );
                 }
 
-                if let Some((_date, line)) = parse_raw_line(self.buffer.as_str()) {
+                if let Some((date_str, line)) = parse_raw_line(self.buffer.as_str()) {
                     if (self.filter)(line) {
-                        debug!(target: LOGNAME, "matched line: {}", line);
-                        // TODO: Send back to the application to do something with
+                        trace!(target: LOGNAME, "matched line: {}", line);
+                        let date = NaiveDateTime::parse_from_str(date_str, "%a %b %d %H:%M:%S %Y")
+                            .unwrap_or_else(|e| {
+                                error!(
+                                    target: LOGNAME,
+                                    "could not parse date: {} got error: {}", date_str, e
+                                );
+                                Local::now().naive_local()
+                            });
+
+                        self.sender
+                            .send((date, line.to_string()))
+                            .expect("sender should not be disconnected");
                     }
                 }
 
@@ -174,12 +192,13 @@ pub struct LogWatcher {
     filename: PathBuf,
     handler: Arc<Mutex<LogHandler>>,
     watcher: RecommendedWatcher,
+    receiver: Receiver<(NaiveDateTime, String)>,
 }
 
 impl LogWatcher {
-    pub fn new<P: Into<PathBuf>>(filename: P) -> Result<LogWatcher> {
-        let filename = filename.into();
-        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path())?));
+    pub fn new(filename: PathBuf) -> Result<LogWatcher> {
+        let (sender, receiver) = bounded(1000);
+        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path(), sender)?));
         let handler_ = handler.clone();
         let watcher = notify::recommended_watcher(move |res| handler_.lock().handle_event(res))?;
 
@@ -187,6 +206,7 @@ impl LogWatcher {
             filename,
             handler,
             watcher,
+            receiver,
         })
     }
 
