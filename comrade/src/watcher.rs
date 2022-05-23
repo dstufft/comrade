@@ -15,9 +15,6 @@ use regex::Regex;
 
 use crate::errors::LogWatcherError;
 
-const LOGNAME: &str = "comrade.watcher";
-const RAW_LOGNAME: &str = "comrade.watcher.raw";
-
 lazy_static! {
     static ref RAW_LINE_RE: Regex = Regex::new(r"^\[([^]]+)\] (.+?)\r?\n$").unwrap();
 }
@@ -79,11 +76,7 @@ impl LogHandler {
 
         if let Some(ref mut reader) = lr.reader {
             reader.seek(SeekFrom::End(0))?;
-            trace!(
-                target: LOGNAME,
-                "seeked to end of file: {}",
-                lr.filename.to_string_lossy()
-            )
+            trace!("seeked to end of file: {}", lr.filename.to_string_lossy())
         }
 
         Ok(lr)
@@ -92,16 +85,11 @@ impl LogHandler {
     fn open_reader(&mut self) -> Option<BufReader<File>> {
         match File::open(self.filename.as_path()) {
             Ok(file) => {
-                debug!(
-                    target: LOGNAME,
-                    "opened file: {}",
-                    self.filename.to_string_lossy()
-                );
+                debug!("opened file: {}", self.filename.to_string_lossy());
                 Some(BufReader::new(file))
             }
             Err(err) => {
                 debug!(
-                    target: LOGNAME,
                     "error opening file: {} error: {:?}",
                     self.filename.to_string_lossy(),
                     err
@@ -119,8 +107,8 @@ impl LogHandler {
         if let Some(ref mut reader) = self.reader {
             let log_error = |e| {
                 error!(
-                    target: LOGNAME,
-                    "error reading file; filename: {} error: {}", self.filename_short, e,
+                    "error reading file; filename: {} error: {}",
+                    self.filename_short, e,
                 );
                 e
             };
@@ -131,10 +119,10 @@ impl LogHandler {
                 .unwrap_or(0)
                 > 0
             {
-                if log_enabled!(target: RAW_LOGNAME, log::Level::Trace) {
+                if log_enabled!(target: "comrade::watcher::raw", log::Level::Trace) {
                     let line = self.buffer.trim_end();
                     trace!(
-                        target: RAW_LOGNAME,
+                        target: "comrade::watcher::raw",
                         "filename: {} line: {}",
                         self.filename_short,
                         line
@@ -143,13 +131,10 @@ impl LogHandler {
 
                 if let Some((date_str, line)) = parse_raw_line(self.buffer.as_str()) {
                     if (self.filter)(line) {
-                        trace!(target: LOGNAME, "matched line: {}", line);
+                        trace!("matched line: {}", line);
                         let date = NaiveDateTime::parse_from_str(date_str, "%a %b %d %H:%M:%S %Y")
                             .unwrap_or_else(|e| {
-                                error!(
-                                    target: LOGNAME,
-                                    "could not parse date: {} got error: {}", date_str, e
-                                );
+                                error!("could not parse date: {} got error: {}", date_str, e);
                                 Local::now().naive_local()
                             });
 
@@ -178,14 +163,11 @@ impl EventHandler for LogHandler {
                 EventKind::Remove(_) => (),
                 EventKind::Access(_) => (),
                 _ => {
-                    warn!(target: LOGNAME, "unexpected event received: {:?}", event)
+                    warn!("unexpected event received: {:?}", event)
                 }
             },
             Err(e) => {
-                error!(
-                    target: LOGNAME,
-                    "an error occured while watching files: {:?}", e
-                );
+                error!("an error occured while watching files: {:?}", e);
             }
         }
     }

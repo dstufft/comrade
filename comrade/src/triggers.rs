@@ -9,7 +9,6 @@ use serde::Deserialize;
 
 use crate::errors::TriggerError;
 
-const LOGNAME: &str = "comrade.triggers";
 const TRIGGER_FILENAME: &str = "Triggers.toml";
 
 type Result<T, E = TriggerError> = core::result::Result<T, E>;
@@ -79,7 +78,7 @@ impl Triggers {
 }
 
 fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> Result<Option<TriggerSet>> {
-    debug!(target: LOGNAME, "loading triggers from {}", dir.display());
+    debug!("loading triggers from {}", dir.display());
 
     let path = dir.join(TRIGGER_FILENAME);
     let file = fs::OpenOptions::new().read(true).open(path.as_path());
@@ -98,7 +97,6 @@ fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> Result<Option<Trig
         }
         Err(e) => {
             error!(
-                target: LOGNAME,
                 "error opening triggers; filename: {} error: {:?}",
                 path.display(),
                 e
