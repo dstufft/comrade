@@ -29,6 +29,10 @@ pub(crate) enum Action {
     },
 }
 
+#[derive(Deserialize, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[serde(transparent)]
+pub(crate) struct TriggerId(String);
+
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct Trigger {
     #[serde(rename = "name")]
@@ -55,13 +59,13 @@ pub(crate) struct TriggerSet {
     pub(crate) meta: TriggerMeta,
 
     #[serde(default)]
-    pub(crate) triggers: BTreeMap<String, Trigger>,
+    pub(crate) triggers: BTreeMap<TriggerId, Trigger>,
 }
 
 #[derive(Default, Debug)]
 pub(crate) struct Triggers {
     triggers: BTreeMap<TriggerSource, TriggerSet>,
-    compiled: BTreeMap<(TriggerSource, String), CompiledTrigger>,
+    compiled: BTreeMap<(TriggerSource, TriggerId), CompiledTrigger>,
 }
 
 impl Triggers {
@@ -101,7 +105,7 @@ impl Triggers {
         Ok(Box::new(move |line| rs.is_match(line)))
     }
 
-    pub(crate) fn compiled(&self) -> &BTreeMap<(TriggerSource, String), CompiledTrigger> {
+    pub(crate) fn compiled(&self) -> &BTreeMap<(TriggerSource, TriggerId), CompiledTrigger> {
         &self.compiled
     }
 }
