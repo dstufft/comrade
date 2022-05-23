@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{BufReader, SeekFrom};
@@ -202,5 +203,38 @@ impl LogWatcher {
 
     pub fn set_filter(&self, filter: Box<dyn Fn(&str) -> bool + Send>) {
         self.handler.lock().set_filter(filter);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct Watchers {
+    watchers: HashMap<String, LogWatcher>,
+}
+
+impl Watchers {
+    pub(crate) fn add(&mut self, id: String, filename: PathBuf) -> Result<Option<LogWatcher>> {
+        Ok(self.watchers.insert(id, LogWatcher::new(filename)?))
+    }
+
+    pub(crate) fn start(&mut self) -> Result<()> {
+        for watcher in self.watchers.values_mut() {
+            watcher.start()?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn stop(&mut self) -> Result<()> {
+        for watcher in self.watchers.values_mut() {
+            watcher.stop()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_filter(&self, id: &str, filter: Box<dyn Fn(&str) -> bool + Send>) {
+        if let Some(watcher) = self.watchers.get(id) {
+            watcher.set_filter(filter)
+        }
     }
 }

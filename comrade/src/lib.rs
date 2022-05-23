@@ -1,6 +1,5 @@
 #![warn(clippy::disallowed_types)]
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 mod config;
@@ -24,7 +23,7 @@ pub enum LoadOptions {
 pub struct Comrade {
     config: config::Config,
     triggers: triggers::Triggers,
-    watchers: HashMap<String, watcher::LogWatcher>,
+    watchers: watcher::Watchers,
 }
 
 impl Comrade {
@@ -47,8 +46,7 @@ impl Comrade {
 
     pub fn init(&mut self) -> Result<()> {
         for (id, c) in self.config.characters.iter() {
-            self.watchers
-                .insert(id.clone(), watcher::LogWatcher::new(c.filename.clone())?);
+            self.watchers.add(id.clone(), c.filename.clone())?;
         }
 
         self.apply_watcher_filters()?;
@@ -57,17 +55,13 @@ impl Comrade {
     }
 
     pub fn start(&mut self) -> Result<()> {
-        for watcher in self.watchers.values_mut() {
-            watcher.start()?;
-        }
+        self.watchers.start()?;
 
         Ok(())
     }
 
     pub fn stop(&mut self) -> Result<()> {
-        for watcher in self.watchers.values_mut() {
-            watcher.stop()?;
-        }
+        self.watchers.stop()?;
 
         Ok(())
     }
@@ -91,8 +85,10 @@ impl Comrade {
     }
 
     fn apply_watcher_filters(&mut self) -> Result<()> {
-        for watcher in self.watchers.values() {
-            watcher.set_filter(self.triggers.as_filter()?);
+        for id in self.config.characters.keys() {
+            // TODO: We need to let you turn these triggers on/off per character.
+            self.watchers
+                .set_filter(id.as_str(), self.triggers.as_filter()?);
         }
 
         Ok(())
