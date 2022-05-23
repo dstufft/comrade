@@ -7,7 +7,8 @@ use log::{debug, error};
 use regex::RegexSet;
 use serde::Deserialize;
 
-use crate::errors::TriggerError;
+use crate::config::Result as ConfigResult;
+use crate::errors::{ConfigError, TriggerError};
 
 const TRIGGER_FILENAME: &str = "Triggers.toml";
 
@@ -41,13 +42,13 @@ pub(crate) struct TriggerSet {
     pub(crate) triggers: BTreeMap<String, Trigger>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct Triggers {
     triggers: BTreeMap<TriggerSource, TriggerSet>,
 }
 
 impl Triggers {
-    pub(crate) fn load(data_dir: &Path) -> Result<Triggers> {
+    pub(super) fn load(data_dir: &Path) -> ConfigResult<Triggers> {
         let mut triggers = BTreeMap::new();
 
         // Load our local triggers
@@ -77,7 +78,7 @@ impl Triggers {
     }
 }
 
-fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> Result<Option<TriggerSet>> {
+fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> ConfigResult<Option<TriggerSet>> {
     debug!("loading triggers from {}", dir.display());
 
     let path = dir.join(TRIGGER_FILENAME);
@@ -89,7 +90,7 @@ fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> Result<Option<Trig
             f.read_to_string(&mut buffer)?;
 
             Ok(toml_edit::de::from_str(buffer.as_str()).map_err(|source| {
-                TriggerError::DeserializationError {
+                ConfigError::DeserializationError {
                     source,
                     filename: path.clone(),
                 }

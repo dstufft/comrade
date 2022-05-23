@@ -3,16 +3,24 @@ use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use arc_swap::{ArcSwap, Guard};
 use platform_dirs::AppDirs;
 use serde::Deserialize;
 
+use crate::config::triggers::Triggers;
 use crate::errors::ConfigError;
 use crate::meta;
+
+mod triggers;
 
 const CONFIG_FILENAME: &str = "Config.toml";
 
 type Result<T, E = ConfigError> = core::result::Result<T, E>;
+
+pub(crate) type ConfigRef = Arc<ArcSwap<Config>>;
+pub(crate) type LoadedConfig = Guard<Arc<Config>>;
 
 fn default_dirs() -> AppDirs {
     AppDirs::new(Some(meta::PKG_NAME_DISPLAY), false)
@@ -53,40 +61,44 @@ pub(crate) struct Config {
 
     #[serde(default)]
     pub(crate) characters: HashMap<String, Character>,
+
+    #[serde(skip)]
+    pub(crate) triggers: Triggers,
 }
 
 impl Config {
     pub(crate) fn from_default_dir() -> Result<Config> {
-        match try_open_config_file(default_dirs().config_dir.as_path(), true)? {
-            Some(file) => parse_config(file),
-            None => Ok(Config {
-                dirs: Directories::default(),
-                characters: HashMap::new(),
-            }),
+        let filename = default_dirs().config_dir.join(CONFIG_FILENAME);
+        match try_open_config_file(filename.as_path(), true)? {
+            Some(file) => parse_config(filename.as_path(), file),
+            None => Ok(Config::default()),
         }
     }
 
     pub(crate) fn from_config_dir(path: PathBuf) -> Result<Config> {
-        let file = try_open_config_file(path.as_path(), false)?
+        let filename = path.join(CONFIG_FILENAME);
+        let file = try_open_config_file(filename.as_path(), false)?
             .expect("None from try_open_config_file with allow_missing=false?");
-        let mut config = parse_config(file)?;
+        let mut config = parse_config(filename.as_path(), file)?;
 
         config.dirs.config = path;
+        config.triggers = Triggers::load(config.dirs.data.as_path())?;
 
         Ok(config)
     }
 }
 
-fn parse_config(mut file: fs::File) -> Result<Config> {
+fn parse_config(filename: &Path, mut file: fs::File) -> Result<Config> {
     let mut buffer = String::new();
     file.read_to_string(&mut buffer)?;
-    Ok(toml_edit::de::from_str(buffer.as_str())?)
+    toml_edit::de::from_str(buffer.as_str()).map_err(|source| ConfigError::DeserializationError {
+        source,
+        filename: filename.to_path_buf(),
+    })
 }
 
-fn try_open_config_file(path: &Path, allow_missing: bool) -> Result<Option<fs::File>> {
-    let file = fs::OpenOptions::new()
-        .read(true)
-        .open(path.join(CONFIG_FILENAME));
+fn try_open_config_file(filename: &Path, allow_missing: bool) -> Result<Option<fs::File>> {
+    let file = fs::OpenOptions::new().read(true).open(filename);
 
     let file = match file {
         Ok(f) => Ok(Some(f)),

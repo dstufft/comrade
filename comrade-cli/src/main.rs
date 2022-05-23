@@ -5,12 +5,12 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use path_clean::PathClean;
 
 use comrade::meta;
-use comrade::{Comrade, LoadOptions};
+use comrade::Comrade;
 
 use crate::app::App;
 
@@ -54,14 +54,7 @@ fn main() -> Result<()> {
 
         // Setup Comrade
         let mut comrade = Comrade::new();
-        comrade
-            .load(LoadOptions::Config {
-                config_dir: config_dir.clone(),
-            })
-            .with_context(|| format!("failed to read configuration from {:?}", config_dir))?;
-        comrade
-            .load(LoadOptions::Triggers)
-            .context("failed to load triggers")?;
+        comrade.load(config_dir)?;
 
         // Actually run our application
         let mut app = App::new(meta::PKG_NAME_DISPLAY, comrade);

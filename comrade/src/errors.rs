@@ -17,12 +17,21 @@ pub enum LogWatcherError {
 }
 
 #[derive(Error, Debug)]
+pub enum DriverError {
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
+}
+
+#[derive(Error, Debug)]
 pub enum ConfigError {
     #[error(transparent)]
     IOError(#[from] std::io::Error),
 
     #[error("could not parse configuration")]
-    DeserializationError(#[from] toml_edit::de::Error),
+    DeserializationError {
+        source: toml_edit::de::Error,
+        filename: PathBuf,
+    },
 }
 
 #[derive(Error, Debug)]
