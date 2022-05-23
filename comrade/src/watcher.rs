@@ -39,18 +39,20 @@ fn parse_raw_line(line: &str) -> Option<(&str, &str)> {
 }
 
 struct LogHandler {
+    id: String,
     filename: PathBuf,
     filename_short: String,
     reader: Option<BufReader<File>>,
     buffer: String,
     filter: Box<dyn Fn(&str) -> bool + Send>,
-    sender: Sender<(NaiveDateTime, String)>,
+    sender: Sender<(String, NaiveDateTime, String)>,
 }
 
 impl LogHandler {
     fn new<P: Into<PathBuf>>(
         filename: P,
-        sender: Sender<(NaiveDateTime, String)>,
+        id: String,
+        sender: Sender<(String, NaiveDateTime, String)>,
     ) -> Result<LogHandler> {
         let filename = filename.into();
         let filename_short = filename
@@ -65,6 +67,7 @@ impl LogHandler {
             .to_string();
 
         let mut lr = LogHandler {
+            id,
             filename,
             filename_short,
             reader: None,
@@ -151,7 +154,7 @@ impl LogHandler {
                             });
 
                         self.sender
-                            .send((date, line.to_string()))
+                            .send((self.id.clone(), date, line.to_string()))
                             .expect("sender should not be disconnected");
                     }
                 }
@@ -192,13 +195,15 @@ struct LogWatcher {
     filename: PathBuf,
     handler: Arc<Mutex<LogHandler>>,
     watcher: RecommendedWatcher,
-    _receiver: Receiver<(NaiveDateTime, String)>,
 }
 
 impl LogWatcher {
-    fn new(filename: PathBuf) -> Result<LogWatcher> {
-        let (sender, receiver) = bounded(1000);
-        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path(), sender)?));
+    fn new(
+        filename: PathBuf,
+        id: String,
+        sender: Sender<(String, NaiveDateTime, String)>,
+    ) -> Result<LogWatcher> {
+        let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path(), id, sender)?));
         let handler_ = handler.clone();
         let watcher = notify::recommended_watcher(move |res| handler_.lock().handle_event(res))?;
 
@@ -206,7 +211,6 @@ impl LogWatcher {
             filename,
             handler,
             watcher,
-            _receiver: receiver,
         })
     }
 
@@ -226,14 +230,30 @@ impl LogWatcher {
     }
 }
 
-#[derive(Default)]
 pub(crate) struct Watchers {
     watchers: HashMap<String, LogWatcher>,
+    sender: Sender<(String, NaiveDateTime, String)>,
+    receiver: Receiver<(String, NaiveDateTime, String)>,
+}
+
+impl Default for Watchers {
+    fn default() -> Watchers {
+        let (sender, receiver) = bounded(1000);
+
+        Watchers {
+            watchers: HashMap::default(),
+            sender,
+            receiver,
+        }
+    }
 }
 
 impl Watchers {
     pub(crate) fn add(&mut self, id: String, filename: PathBuf) -> Result<()> {
-        self.watchers.insert(id, LogWatcher::new(filename)?);
+        self.watchers.insert(
+            id.clone(),
+            LogWatcher::new(filename, id, self.sender.clone())?,
+        );
 
         Ok(())
     }
