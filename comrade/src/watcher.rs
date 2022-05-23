@@ -21,9 +21,10 @@ lazy_static! {
 
 type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
 
-type LogSender = Sender<LogEvent>;
-type LogReceiver = Receiver<LogEvent>;
+type LogSender = Sender<Arc<LogEvent>>;
+pub(crate) type LogReceiver = Receiver<Arc<LogEvent>>;
 
+#[derive(Debug)]
 pub(crate) struct LogEvent {
     pub(crate) id: String,
     pub(crate) date: NaiveDateTime,
@@ -144,11 +145,11 @@ impl LogHandler {
                             });
 
                         self.sender
-                            .send(LogEvent {
+                            .send(Arc::new(LogEvent {
                                 id: self.id.clone(),
                                 date,
                                 message: line.to_string(),
-                            })
+                            }))
                             .expect("sender should not be disconnected");
                     }
                 }
@@ -265,5 +266,9 @@ impl Watchers {
         if let Some(watcher) = self.watchers.get(id) {
             watcher.set_filter(filter)
         }
+    }
+
+    pub(crate) fn receiver(&self) -> LogReceiver {
+        self.receiver.clone()
     }
 }

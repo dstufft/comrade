@@ -9,18 +9,26 @@ use serde::Deserialize;
 
 use crate::config::Result as ConfigResult;
 use crate::errors::{ConfigError, TriggerError};
+use crate::triggers::CompiledTrigger;
 
 const TRIGGER_FILENAME: &str = "Triggers.toml";
 
 type Result<T, E = TriggerError> = core::result::Result<T, E>;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub(crate) enum Action {
+    DisplayText { text: String },
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub(crate) struct Trigger {
     #[serde(rename = "name")]
     pub(crate) _name: String,
     #[serde(default, rename = "comment")]
     pub(crate) _comment: String,
     pub(crate) search_text: String,
+    pub(crate) actions: Vec<Action>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Clone)]
@@ -45,15 +53,23 @@ pub(crate) struct TriggerSet {
 #[derive(Default, Debug)]
 pub(crate) struct Triggers {
     triggers: BTreeMap<TriggerSource, TriggerSet>,
+    compiled: BTreeMap<(TriggerSource, String), CompiledTrigger>,
 }
 
 impl Triggers {
     pub(super) fn load(data_dir: &Path) -> ConfigResult<Triggers> {
         let mut triggers = BTreeMap::new();
+        let mut compiled = BTreeMap::new();
 
         // Load our local triggers
         match load_triggers_from_dir(data_dir.join("local").as_path(), true)? {
             Some(trg) => {
+                for (k, trigger) in trg.triggers.iter() {
+                    compiled.insert(
+                        (trg.meta.source.clone(), k.clone()),
+                        CompiledTrigger::new(trigger)?,
+                    );
+                }
                 triggers.insert(trg.meta.source.clone(), trg);
             }
             None => {}
@@ -61,7 +77,7 @@ impl Triggers {
 
         // TODO: Load Remote Triggers
 
-        Ok(Triggers { triggers })
+        Ok(Triggers { triggers, compiled })
     }
 
     pub(crate) fn as_filter(&self) -> Result<Box<dyn Fn(&str) -> bool + Send>> {
@@ -75,6 +91,10 @@ impl Triggers {
         let rs = RegexSet::new(regexs)?;
 
         Ok(Box::new(move |line| rs.is_match(line)))
+    }
+
+    pub(crate) fn compiled(&self) -> &BTreeMap<(TriggerSource, String), CompiledTrigger> {
+        &self.compiled
     }
 }
 

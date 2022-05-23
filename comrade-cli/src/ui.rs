@@ -1,12 +1,12 @@
 use tui::backend::Backend;
-use tui::layout::{Constraint, Layout, Rect};
+use tui::layout::{Constraint, Corner, Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::{Span, Spans};
-use tui::widgets::{Block, Borders, Tabs};
+use tui::widgets::{Block, Borders, List, ListItem, Tabs};
 use tui::Frame;
 use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
 
-use crate::app::{App, LogsTab};
+use crate::app::{App, EventsTab, LogsTab};
 
 pub(crate) fn init_logger_state() -> TuiWidgetState {
     TuiWidgetState::new().set_default_display_level(log::LevelFilter::Debug)
@@ -29,9 +29,27 @@ pub(crate) fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     f.render_widget(tabs, chunks[0]);
 
-    if app.tabs().current().id() == "logs" {
-        draw_logs_tab(f, app, chunks[1])
+    match app.tabs().current().id() {
+        "events" => draw_events_tab(f, app, chunks[1]),
+        "logs" => draw_logs_tab(f, app, chunks[1]),
+        _ => {}
     }
+}
+
+fn draw_events_tab<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+    let tab: &EventsTab = app.tabs().tab("events").expect("could not find events tab");
+
+    let block = Block::default().borders(Borders::ALL);
+    let inner_area = block.inner(area);
+    f.render_widget(block, area);
+
+    let items: Vec<ListItem> = tab.messages().into_iter().map(ListItem::new).collect();
+    let list = List::new(items)
+        .block(Block::default().title("Messages").borders(Borders::ALL))
+        .style(Style::default().fg(Color::White))
+        .start_corner(Corner::BottomLeft);
+
+    f.render_widget(list, inner_area);
 }
 
 fn draw_logs_tab<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {

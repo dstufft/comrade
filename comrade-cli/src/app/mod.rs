@@ -4,10 +4,11 @@ use crossterm::event;
 use crossterm::event::{KeyCode, KeyModifiers};
 use downcast_rs::{impl_downcast, Downcast};
 use indexmap::map::IndexMap;
+use log::debug;
 
 use comrade::Comrade;
 
-pub(crate) use crate::app::tabs::{ConfigTab, DebugTab, LogsTab};
+pub(crate) use crate::app::tabs::{ConfigTab, DebugTab, EventsTab, LogsTab};
 use crate::errors::{ApplicationError, TerminalError};
 use crate::terminal::ComradeTerminal;
 use crate::ui;
@@ -92,6 +93,7 @@ impl App {
             title: title.into(),
             finished: false,
             tabs: Tabs::new(vec![
+                EventsTab::init("Events"),
                 ConfigTab::init("Config"),
                 LogsTab::init("Logs"),
                 DebugTab::init("Debug"),
@@ -155,7 +157,33 @@ impl App {
         Ok(())
     }
 
-    fn on_tick(&mut self) {}
+    fn on_tick(&mut self) {
+        let tab: &EventsTab = self
+            .tabs()
+            .tab("events")
+            .expect("could not find events tab");
+
+        // In theory if there is a constant stream of events, then we will
+        // never finish this tick, which we don't want to happen because
+        // we only render the UI between ticks. Thus we'll only read so many
+        // of these before we bail out and let the next set happen.
+        //
+        // Another possible solution to this would be to spin this off into
+        // it's own thread, and have it update our data structures, and remove
+        // the concept of ticks in the UI all together. However for ease of
+        // implementation we're going with the tick approach for now.
+        let mut processed = 0;
+        while let Some(event) = self.comrade.event() {
+            debug!("received event: {:?}", event);
+
+            tab.event(event);
+
+            processed += 1;
+            if processed > 1000 {
+                break;
+            }
+        }
+    }
 
     fn on_event(&mut self, event: event::Event) -> Result<()> {
         if let event::Event::Key(key) = event {

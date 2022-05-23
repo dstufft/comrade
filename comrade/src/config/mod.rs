@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use arc_swap::{ArcSwap, Guard};
+use arc_swap::{ArcSwap, Cache, Guard};
 use platform_dirs::AppDirs;
 use serde::Deserialize;
 
@@ -13,7 +13,7 @@ use crate::config::triggers::Triggers;
 use crate::errors::ConfigError;
 use crate::meta;
 
-mod triggers;
+pub(crate) mod triggers;
 
 const CONFIG_FILENAME: &str = "Config.toml";
 
@@ -21,6 +21,7 @@ type Result<T, E = ConfigError> = core::result::Result<T, E>;
 
 pub(crate) type ConfigRef = Arc<ArcSwap<Config>>;
 pub(crate) type LoadedConfig = Guard<Arc<Config>>;
+pub(crate) type CachedConfig = Cache<ConfigRef, Arc<Config>>;
 
 fn default_dirs() -> AppDirs {
     AppDirs::new(Some(meta::PKG_NAME_DISPLAY), false)

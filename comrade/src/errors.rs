@@ -32,19 +32,13 @@ pub enum ConfigError {
         source: toml_edit::de::Error,
         filename: PathBuf,
     },
+
+    #[error("could not compile triggers")]
+    TriggerError(#[from] TriggerError),
 }
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
-    #[error(transparent)]
-    IOError(#[from] std::io::Error),
-
-    #[error("could not parse triggers")]
-    DeserializationError {
-        source: toml_edit::de::Error,
-        filename: PathBuf,
-    },
-
     #[error("invalid regex")]
     InvalidRegex(#[from] regex::Error),
 }

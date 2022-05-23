@@ -6,7 +6,10 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 
 mod config;
+mod driver;
 pub mod errors;
+pub mod events;
+mod triggers;
 mod watcher;
 
 pub mod meta {
@@ -18,6 +21,7 @@ type Result<T, E = errors::ComradeError> = core::result::Result<T, E>;
 pub struct Comrade {
     config: config::ConfigRef,
     watchers: watcher::Watchers,
+    driver: driver::Driver,
 }
 
 impl Default for Comrade {
@@ -28,7 +32,15 @@ impl Default for Comrade {
 
 impl Comrade {
     pub fn new() -> Comrade {
-        Comrade::default()
+        let config = Arc::new(ArcSwap::from_pointee(config::Config::default()));
+        let watchers = watcher::Watchers::default();
+        let driver = driver::Driver::create(config.clone(), watchers.receiver());
+
+        Comrade {
+            config,
+            watchers,
+            driver,
+        }
     }
 
     pub fn load(&mut self, config_dir: Option<PathBuf>) -> Result<()> {
@@ -62,6 +74,10 @@ impl Comrade {
         self.watchers.stop()?;
 
         Ok(())
+    }
+
+    pub fn event(&self) -> Option<events::Event> {
+        self.driver.event()
     }
 }
 
