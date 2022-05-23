@@ -21,6 +21,15 @@ lazy_static! {
 
 type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
 
+type LogSender = Sender<LogEvent>;
+type LogReceiver = Receiver<LogEvent>;
+
+pub(crate) struct LogEvent {
+    pub(crate) id: String,
+    pub(crate) date: NaiveDateTime,
+    pub(crate) message: String,
+}
+
 #[inline(always)]
 fn parse_raw_line(line: &str) -> Option<(&str, &str)> {
     RAW_LINE_RE.captures(line).map(|caps| {
@@ -42,15 +51,11 @@ struct LogHandler {
     reader: Option<BufReader<File>>,
     buffer: String,
     filter: Box<dyn Fn(&str) -> bool + Send>,
-    sender: Sender<(String, NaiveDateTime, String)>,
+    sender: LogSender,
 }
 
 impl LogHandler {
-    fn new<P: Into<PathBuf>>(
-        filename: P,
-        id: String,
-        sender: Sender<(String, NaiveDateTime, String)>,
-    ) -> Result<LogHandler> {
+    fn new<P: Into<PathBuf>>(filename: P, id: String, sender: LogSender) -> Result<LogHandler> {
         let filename = filename.into();
         let filename_short = filename
             .file_name()
@@ -139,7 +144,11 @@ impl LogHandler {
                             });
 
                         self.sender
-                            .send((self.id.clone(), date, line.to_string()))
+                            .send(LogEvent {
+                                id: self.id.clone(),
+                                date,
+                                message: line.to_string(),
+                            })
                             .expect("sender should not be disconnected");
                     }
                 }
@@ -180,11 +189,7 @@ struct LogWatcher {
 }
 
 impl LogWatcher {
-    fn new(
-        filename: PathBuf,
-        id: String,
-        sender: Sender<(String, NaiveDateTime, String)>,
-    ) -> Result<LogWatcher> {
+    fn new(filename: PathBuf, id: String, sender: LogSender) -> Result<LogWatcher> {
         let handler = Arc::new(Mutex::new(LogHandler::new(filename.as_path(), id, sender)?));
         let handler_ = handler.clone();
         let watcher = notify::recommended_watcher(move |res| handler_.lock().handle_event(res))?;
@@ -214,8 +219,8 @@ impl LogWatcher {
 
 pub(crate) struct Watchers {
     watchers: HashMap<String, LogWatcher>,
-    sender: Sender<(String, NaiveDateTime, String)>,
-    receiver: Receiver<(String, NaiveDateTime, String)>,
+    sender: LogSender,
+    receiver: LogReceiver,
 }
 
 impl Default for Watchers {
