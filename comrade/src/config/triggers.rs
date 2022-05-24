@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
@@ -9,13 +10,31 @@ use regex::RegexSet;
 use serde::Deserialize;
 use serde_with::{serde_as, DurationSeconds};
 
-use crate::config::Result as ConfigResult;
+use crate::config::{Character, CharacterId, Result as ConfigResult};
 use crate::errors::{ConfigError, TriggerError};
 use crate::triggers::CompiledTrigger;
 
 const TRIGGER_FILENAME: &str = "Triggers.toml";
 
 type Result<T, E = TriggerError> = core::result::Result<T, E>;
+
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+pub(crate) struct TriggerRef {
+    source: TriggerSource,
+    id: TriggerId,
+}
+
+impl TriggerRef {
+    pub(crate) fn new(source: TriggerSource, id: TriggerId) -> TriggerRef {
+        TriggerRef { source, id }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DisabledTrigger {
+    pub(crate) source: TriggerSource,
+    pub(crate) id: TriggerId,
+}
 
 #[serde_as]
 #[derive(Debug, Deserialize, Clone)]
@@ -45,7 +64,9 @@ pub(crate) struct Trigger {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Clone)]
 pub(crate) enum TriggerSource {
+    #[serde(rename = "local")]
     Local,
+    #[serde(rename = "remote")]
     Remote(String),
 }
 
@@ -65,22 +86,43 @@ pub(crate) struct TriggerSet {
 #[derive(Default, Debug)]
 pub(crate) struct Triggers {
     triggers: BTreeMap<TriggerSource, TriggerSet>,
-    compiled: BTreeMap<(TriggerSource, TriggerId), CompiledTrigger>,
+    compiled: HashMap<CharacterId, Vec<CompiledTrigger>>,
+    filters: HashMap<CharacterId, RegexSet>,
 }
 
 impl Triggers {
-    pub(super) fn load(data_dir: &Path) -> ConfigResult<Triggers> {
+    pub(super) fn load(
+        data_dir: &Path,
+        characters: &HashMap<CharacterId, Character>,
+    ) -> ConfigResult<Triggers> {
         let mut triggers = BTreeMap::new();
-        let mut compiled = BTreeMap::new();
+        let mut compiled = HashMap::new();
+        let mut filters = HashMap::new();
 
         // Load our local triggers
         match load_triggers_from_dir(data_dir.join("local").as_path(), true)? {
             Some(trg) => {
-                for (k, trigger) in trg.triggers.iter() {
-                    compiled.insert(
-                        (trg.meta.source.clone(), k.clone()),
-                        CompiledTrigger::new(trigger)?,
-                    );
+                for (trigger_id, trigger) in trg.triggers.iter() {
+                    let compiled_t = CompiledTrigger::new(trigger)?;
+                    for (character_id, character) in characters {
+                        if !character.disabled_triggers.contains_key(&TriggerRef::new(
+                            trg.meta.source.clone(),
+                            trigger_id.clone(),
+                        )) {
+                            // Precompile our Trigger
+                            compiled
+                                .entry(character_id.clone())
+                                .or_insert_with(Vec::new)
+                                .push(compiled_t.clone());
+
+                            // Add this pattern to the list of patterns for this character
+                            // for later compilation of our filter function.
+                            filters
+                                .entry(character_id.clone())
+                                .or_insert_with(Vec::new)
+                                .push(trigger.search_text.clone());
+                        }
+                    }
                 }
                 triggers.insert(trg.meta.source.clone(), trg);
             }
@@ -89,24 +131,36 @@ impl Triggers {
 
         // TODO: Load Remote Triggers
 
-        Ok(Triggers { triggers, compiled })
+        // Compile our filter functions
+        let filters = filters
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k,
+                    RegexSet::new(v).expect("error compiling after validation?"),
+                )
+            })
+            .collect();
+
+        Ok(Triggers {
+            triggers,
+            compiled,
+            filters,
+        })
     }
 
-    pub(crate) fn as_filter(&self) -> Result<Box<dyn Fn(&str) -> bool + Send>> {
-        let mut regexs = Vec::new();
-        for ts in self.triggers.values() {
-            for trigger in ts.triggers.values() {
-                regexs.push(trigger.search_text.as_str());
+    pub(crate) fn filter(&self, id: &CharacterId) -> Box<dyn Fn(&str) -> bool + Send> {
+        match self.filters.get(id) {
+            Some(re) => {
+                let re = re.clone();
+                Box::new(move |line| re.is_match(line))
             }
+            None => Box::new(|_line| false),
         }
-
-        let rs = RegexSet::new(regexs)?;
-
-        Ok(Box::new(move |line| rs.is_match(line)))
     }
 
-    pub(crate) fn compiled(&self) -> &BTreeMap<(TriggerSource, TriggerId), CompiledTrigger> {
-        &self.compiled
+    pub(crate) fn compiled(&self, id: &CharacterId) -> Option<&[CompiledTrigger]> {
+        self.compiled.get(id).map(|v| v.as_slice())
     }
 }
 

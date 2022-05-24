@@ -90,7 +90,7 @@ impl Comrade {
         for id in self.config().characters.keys() {
             // TODO: We need to let you turn these triggers on/off per character.
             self.watchers
-                .set_filter(id, self.config().triggers.as_filter()?);
+                .set_filter(id, self.config().triggers.filter(id));
         }
 
         Ok(())

@@ -75,7 +75,7 @@ impl Action {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct CompiledTrigger {
     trigger: Trigger,
     regex: Regex,

@@ -9,7 +9,7 @@ use arc_swap::{ArcSwap, Cache, Guard};
 use platform_dirs::AppDirs;
 use serde::Deserialize;
 
-use crate::config::triggers::Triggers;
+use crate::config::triggers::{DisabledTrigger, TriggerRef, Triggers};
 use crate::errors::ConfigError;
 use crate::meta;
 
@@ -57,6 +57,9 @@ pub(crate) struct Character {
     #[serde(rename = "server")]
     pub(crate) _server: String,
     pub(crate) filename: PathBuf,
+    #[serde(rename = "disabled-triggers")]
+    #[serde(with = "disabled_triggers")]
+    pub(crate) disabled_triggers: HashMap<TriggerRef, DisabledTrigger>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -87,7 +90,7 @@ impl Config {
         let mut config = parse_config(filename.as_path(), file)?;
 
         config.dirs.config = path;
-        config.triggers = Triggers::load(config.dirs.data.as_path())?;
+        config.triggers = Triggers::load(config.dirs.data.as_path(), &config.characters)?;
 
         Ok(config)
     }
@@ -117,4 +120,36 @@ fn try_open_config_file(filename: &Path, allow_missing: bool) -> Result<Option<f
     }?;
 
     Ok(file)
+}
+
+mod disabled_triggers {
+    use std::collections::HashMap;
+
+    use serde::de::{Deserialize, Deserializer};
+    // use serde::ser::Serializer;
+
+    use super::{DisabledTrigger, TriggerRef};
+
+    // pub fn serialize<S>(
+    //     map: &HashMap<i64, DisabledTrigger>,
+    //     serializer: S,
+    // ) -> Result<S::Ok, S::Error>
+    // where
+    //     S: Serializer,
+    // {
+    //     serializer.collect_seq(map.values())
+    // }
+
+    pub(super) fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<HashMap<TriggerRef, DisabledTrigger>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut map = HashMap::new();
+        for item in Vec::<DisabledTrigger>::deserialize(deserializer)? {
+            map.insert(TriggerRef::new(item.source.clone(), item.id.clone()), item);
+        }
+        Ok(map)
+    }
 }

@@ -105,18 +105,18 @@ impl DriverThread {
         trace!("received log event: {:?}", matched);
         let config = self.config.load();
 
-        // If we don't know this character, then it's probably been removed
-        // since this event was sent.
-        if let Some(_character) = config.characters.get(&*matched.id) {
-            // TODO: Could we do something smart here, and modify our filter so that
-            //       instead of returning a bool, it returns the matched triggers and
-            //       then only try those? The biggest issue with that, is technically
-            //       the configuration can change between LogEvent being generated and
-            //       this method being called, so the order of the triggers could have
-            //       changed. So we'd need a Vec of strings, and it might be too heavy
-            //       on the allocations? Maybe examine a short string library?
-            for trigger in config.triggers.compiled().values() {
-                // TODO: Determine if this trigger is enabled for this character.
+        // TODO: Could we do something smart here, and modify our filter so that
+        //       instead of returning a bool, it returns the matched triggers and
+        //       then only try those? The biggest issue with that, is technically
+        //       the configuration can change between LogEvent being generated and
+        //       this method being called, so the order of the triggers could have
+        //       changed. So we'd need a Vec of strings, and it might be too heavy
+        //       on the allocations? Maybe examine a short string library?
+        //
+        // If config.triggers.compiled() returns a None, then we don't have any
+        // triggers for this character, so we'll jsut noop this event.
+        if let Some(triggers) = config.triggers.compiled(&*matched.id) {
+            for trigger in triggers {
                 if let Some(actions) = trigger.execute(&matched) {
                     for mut action in actions {
                         action_events(&self.events, &mut action);
