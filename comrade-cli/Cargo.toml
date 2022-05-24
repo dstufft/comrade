@@ -9,14 +9,14 @@ path = "src/main.rs"
 
 [dependencies]
 comrade = { path = "../comrade" }
-anyhow = "1.0.57"
-camino = "1.0.9"
-clap = { version = "3.1.18", features = ["derive"] }
-crossterm = "0.23.2"
-downcast-rs = "1.2.0"
-indexmap = "1.8.1"
-log = { version = "0.4.17", features = ["std", "release_max_level_debug"] }
-path-clean = "0.1.0"
-thiserror = "1.0.31"
-tui = "0.18.0"
+anyhow = "1.0"
+camino = "1.0"
+clap = { version = "3.1", features = ["derive"] }
+crossterm = "0.23"
+downcast-rs = "1.2"
+indexmap = "1.8"
+log = { version = "0.4", features = ["std", "release_max_level_debug"] }
+path-clean = "0.1"
+thiserror = "1.0"
+tui = "0.18"
 tui-logger = { git = "https://github.com/gin66/tui-logger.git", rev = "cd7e42665a8eac60adac6ab5d570730dfbcb3a12" }
