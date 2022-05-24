@@ -9,7 +9,6 @@ built = "0.5"
 
 [dependencies]
 arc-swap = "1.5"
-chrono = "0.4"
 crossbeam-channel = "0.5.4"
 lazy_static = "1.4.0"
 log = { version = "0.4.17", features = ["std"] }

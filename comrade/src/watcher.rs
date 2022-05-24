@@ -5,7 +5,6 @@ use std::io::{BufReader, SeekFrom};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use chrono::{Local, NaiveDateTime};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use lazy_static::lazy_static;
 use log::{debug, error, log_enabled, trace, warn};
@@ -17,7 +16,7 @@ use crate::config::CharacterId;
 use crate::errors::LogWatcherError;
 
 lazy_static! {
-    static ref RAW_LINE_RE: Regex = Regex::new(r"^\[([^]]+)\] (.+?)\r?\n$").unwrap();
+    static ref RAW_LINE_RE: Regex = Regex::new(r"^\[(?:[^]]+)\] (.+?)\r?\n$").unwrap();
 }
 
 type Result<T, E = LogWatcherError> = core::result::Result<T, E>;
@@ -28,21 +27,15 @@ pub(crate) type LogReceiver = Receiver<Arc<LogEvent>>;
 #[derive(Debug)]
 pub(crate) struct LogEvent {
     pub(crate) id: Arc<CharacterId>,
-    pub(crate) date: NaiveDateTime,
     pub(crate) message: String,
 }
 
 #[inline(always)]
-fn parse_raw_line(line: &str) -> Option<(&str, &str)> {
+fn parse_raw_line(line: &str) -> Option<&str> {
     RAW_LINE_RE.captures(line).map(|caps| {
-        (
-            caps.get(1)
-                .expect("regex somehow matched without mandatory date capture")
-                .as_str(),
-            caps.get(2)
-                .expect("regex somehow matched without mandatory line capture")
-                .as_str(),
-        )
+        caps.get(1)
+            .expect("regex somehow matched without mandatory date capture")
+            .as_str()
     })
 }
 
@@ -140,19 +133,13 @@ impl LogHandler {
                     );
                 }
 
-                if let Some((date_str, line)) = parse_raw_line(self.buffer.as_str()) {
+                if let Some(line) = parse_raw_line(self.buffer.as_str()) {
                     if (self.filter)(line) {
                         trace!("matched line: {}", line);
-                        let date = NaiveDateTime::parse_from_str(date_str, "%a %b %d %H:%M:%S %Y")
-                            .unwrap_or_else(|e| {
-                                error!("could not parse date: {} got error: {}", date_str, e);
-                                Local::now().naive_local()
-                            });
 
                         self.sender
                             .send(Arc::new(LogEvent {
                                 id: self.id.clone(),
-                                date,
                                 message: line.to_string(),
                             }))
                             .expect("sender should not be disconnected");
