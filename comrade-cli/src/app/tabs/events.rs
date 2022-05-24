@@ -1,15 +1,32 @@
 use crossterm::event;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use comrade::events::{Event, EventKind};
 
 use crate::app::{Eventable, Result, Tab};
 
+pub(crate) struct Timer {
+    pub(crate) text: Arc<String>,
+    pub(crate) duration: Duration,
+    pub(crate) remaining: Duration,
+}
+
+impl Timer {
+    pub(crate) fn percent(&self) -> u16 {
+        let percent_f = (self.remaining.as_secs() as f64 / self.duration.as_secs() as f64) * 100.0;
+        let percent: u16 = percent_f as u16;
+        percent
+    }
+}
+
 pub(crate) struct EventsTab {
     title: String,
     messages: RefCell<Vec<Arc<String>>>,
     triggereds: RefCell<Vec<Vec<String>>>,
+    timers: RefCell<HashMap<String, Arc<Timer>>>,
 }
 
 impl EventsTab {
@@ -18,6 +35,7 @@ impl EventsTab {
             title: title.into(),
             messages: RefCell::new(Vec::new()),
             triggereds: RefCell::new(Vec::new()),
+            timers: RefCell::new(HashMap::new()),
         })
     }
 
@@ -51,6 +69,21 @@ impl EventsTab {
                     messages.drain(100..len);
                 }
             }
+            EventKind::Countdown {
+                text,
+                duration,
+                remaining,
+            } => {
+                let mut timers = self.timers.borrow_mut();
+                let timer = Arc::new(Timer {
+                    text: text.clone(),
+                    duration: *duration,
+                    remaining: *remaining,
+                });
+
+                timers.insert(timer.text.to_string(), timer);
+                timers.retain(|_k, t| !t.remaining.is_zero());
+            }
         }
     }
 
@@ -64,6 +97,10 @@ impl EventsTab {
 
     pub(crate) fn triggereds(&self) -> Vec<Vec<String>> {
         self.triggereds.borrow().iter().cloned().collect()
+    }
+
+    pub(crate) fn timers(&self) -> Vec<Arc<Timer>> {
+        self.timers.borrow().values().cloned().collect()
     }
 }
 

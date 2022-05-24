@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use regex::{Captures, Regex};
 
@@ -20,6 +20,11 @@ enum ActionKind {
     },
     DisplayText {
         text: Arc<String>,
+    },
+    Countdown {
+        text: Arc<String>,
+        duration: Duration,
+        ends_at: Instant,
     },
 }
 
@@ -44,6 +49,25 @@ impl Action {
                 (
                     ActionKind::DisplayText {
                         text: Arc::new(expanded),
+                    },
+                    delay,
+                )
+            }
+            TriggerAction::Countdown {
+                text,
+                duration,
+                delay,
+            } => {
+                let mut expanded = String::new();
+                caps.expand(text.as_str(), &mut expanded);
+
+                let start_delay = delay.unwrap_or(Duration::ZERO);
+
+                (
+                    ActionKind::Countdown {
+                        text: Arc::new(expanded),
+                        duration: *duration,
+                        ends_at: Instant::now() + *duration + start_delay,
                     },
                     delay,
                 )
@@ -96,6 +120,26 @@ impl Action {
             ActionKind::DisplayText { text } => {
                 self.finished = true;
                 Some(vec![Event::new(EventKind::DisplayText(text.clone()))])
+            }
+            ActionKind::Countdown {
+                text,
+                duration,
+                ends_at,
+            } => {
+                if Instant::now() >= *ends_at {
+                    self.finished = true;
+                    Some(vec![Event::new(EventKind::Countdown {
+                        text: text.clone(),
+                        duration: *duration,
+                        remaining: Duration::ZERO,
+                    })])
+                } else {
+                    Some(vec![Event::new(EventKind::Countdown {
+                        text: text.clone(),
+                        duration: *duration,
+                        remaining: ends_at.duration_since(Instant::now()),
+                    })])
+                }
             }
         }
     }

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
 
@@ -18,6 +18,11 @@ pub enum EventKind {
         log: Arc<LogEvent>,
     },
     DisplayText(Arc<String>),
+    Countdown {
+        text: Arc<String>,
+        duration: Duration,
+        remaining: Duration,
+    },
 }
 
 #[derive(Debug)]

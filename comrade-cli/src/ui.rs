@@ -1,8 +1,11 @@
+use std::time::Duration;
+
+use humantime::format_duration;
 use tui::backend::Backend;
 use tui::layout::{Constraint, Corner, Direction, Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::{Span, Spans};
-use tui::widgets::{Block, Borders, List, ListItem, Row, Table, Tabs};
+use tui::widgets::{Block, Borders, Gauge, List, ListItem, Row, Table, Tabs};
 use tui::Frame;
 use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
 
@@ -61,6 +64,31 @@ fn draw_events_tab_overlay<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Re
         .start_corner(Corner::BottomLeft);
 
     f.render_widget(list, chunks[0]);
+
+    let block = Block::default().title("Timers").borders(Borders::ALL);
+    let timer_area = block.inner(chunks[1]);
+    f.render_widget(block, chunks[1]);
+
+    let timers = tab.timers();
+
+    let mut constraints: Vec<Constraint> = timers.iter().map(|_| Constraint::Length(1)).collect();
+    constraints.push(Constraint::Length(1));
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints.as_ref())
+        .split(timer_area);
+
+    for (idx, timer) in timers.iter().enumerate() {
+        let gauge = Gauge::default()
+            .label(format!(
+                "{} {}",
+                timer.text,
+                format_duration(Duration::from_secs(timer.remaining.as_secs()))
+            ))
+            .gauge_style(Style::default().fg(Color::Red).bg(Color::Black))
+            .percent(timer.percent());
+        f.render_widget(gauge, chunks[idx])
+    }
 }
 
 fn draw_events_tab_matches<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {

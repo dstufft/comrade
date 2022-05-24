@@ -44,6 +44,14 @@ pub enum Action {
         #[serde(default)]
         delay: Option<Duration>,
     },
+    Countdown {
+        text: String,
+        #[serde_as(as = "DurationSeconds<u64>")]
+        duration: Duration,
+        #[serde_as(as = "Option<DurationSeconds<u64>>")]
+        #[serde(default)]
+        delay: Option<Duration>,
+    },
 }
 
 #[derive(Deserialize, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
