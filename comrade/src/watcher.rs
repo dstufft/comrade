@@ -25,9 +25,15 @@ type LogSender = Sender<Arc<LogEvent>>;
 pub(crate) type LogReceiver = Receiver<Arc<LogEvent>>;
 
 #[derive(Debug)]
-pub(crate) struct LogEvent {
+pub struct LogEvent {
     pub(crate) id: Arc<CharacterId>,
-    pub(crate) message: String,
+    message: String,
+}
+
+impl LogEvent {
+    pub fn message(&self) -> &str {
+        self.message.as_str()
+    }
 }
 
 #[inline(always)]

@@ -16,10 +16,10 @@ use crate::triggers::CompiledTrigger;
 
 const TRIGGER_FILENAME: &str = "Triggers.toml";
 
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub(crate) struct TriggerRef {
-    source: TriggerSource,
-    id: TriggerId,
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Clone)]
+pub struct TriggerRef {
+    pub source: TriggerSource,
+    pub id: TriggerId,
 }
 
 impl TriggerRef {
@@ -28,16 +28,16 @@ impl TriggerRef {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct DisabledTrigger {
-    pub(crate) source: TriggerSource,
-    pub(crate) id: TriggerId,
+#[derive(Debug, Deserialize, Clone)]
+pub struct DisabledTrigger {
+    pub source: TriggerSource,
+    pub id: TriggerId,
 }
 
 #[serde_as]
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "type")]
-pub(crate) enum Action {
+pub enum Action {
     DisplayText {
         text: String,
         #[serde_as(as = "Option<DurationSeconds<u64>>")]
@@ -48,20 +48,19 @@ pub(crate) enum Action {
 
 #[derive(Deserialize, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 #[serde(transparent)]
-pub(crate) struct TriggerId(String);
+pub struct TriggerId(String);
 
 #[derive(Debug, Deserialize, Clone)]
-pub(crate) struct Trigger {
-    #[serde(rename = "name")]
-    pub(crate) _name: String,
-    #[serde(default, rename = "comment")]
-    pub(crate) _comment: String,
-    pub(crate) search_text: String,
-    pub(crate) actions: Vec<Action>,
+pub struct Trigger {
+    pub name: String,
+    #[serde(default)]
+    pub comment: String,
+    pub search_text: String,
+    pub actions: Vec<Action>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Clone)]
-pub(crate) enum TriggerSource {
+pub enum TriggerSource {
     #[serde(rename = "local")]
     Local,
     #[serde(rename = "remote")]
@@ -101,7 +100,6 @@ impl Triggers {
         match load_triggers_from_dir(data_dir.join("local").as_path(), true)? {
             Some(trg) => {
                 for (trigger_id, trigger) in trg.triggers.iter() {
-                    let compiled_t = CompiledTrigger::new(trigger)?;
                     for (character_id, character) in characters {
                         if !character.disabled_triggers.contains_key(&TriggerRef::new(
                             trg.meta.source.clone(),
@@ -111,7 +109,7 @@ impl Triggers {
                             compiled
                                 .entry(character_id.clone())
                                 .or_insert_with(Vec::new)
-                                .push(compiled_t.clone());
+                                .push(CompiledTrigger::new(character, trigger)?);
 
                             // Add this pattern to the list of patterns for this character
                             // for later compilation of our filter function.

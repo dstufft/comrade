@@ -4,6 +4,7 @@ use std::time::Instant;
 use regex::{Captures, Regex};
 
 use crate::config::triggers::{Action as TriggerAction, Trigger};
+use crate::config::Character;
 use crate::errors::TriggerError;
 use crate::events::{Event, EventKind};
 use crate::watcher::LogEvent;
@@ -12,19 +13,25 @@ type Result<T, E = TriggerError> = core::result::Result<T, E>;
 
 #[derive(Debug)]
 enum ActionKind {
-    DisplayText { text: Arc<String> },
+    Triggered {
+        character: Arc<Character>,
+        trigger: Arc<Trigger>,
+        log: Arc<LogEvent>,
+    },
+    DisplayText {
+        text: Arc<String>,
+    },
 }
 
 #[derive(Debug)]
 pub(crate) struct Action {
-    _log: Arc<LogEvent>,
     kind: ActionKind,
     delay_until: Option<Instant>,
     finished: bool,
 }
 
 impl Action {
-    fn new(log: Arc<LogEvent>, caps: &Captures, action: &TriggerAction) -> Action {
+    fn new(caps: &Captures, action: &TriggerAction) -> Action {
         // TODO: We could remove an allocation and memcpy here by turning some of
         //       these String into Arc<String>, and conditionally doing the expansion
         //       based on if there are expansion variables or not.. however that is
@@ -44,9 +51,20 @@ impl Action {
         };
 
         Action {
-            _log: log,
             kind,
             delay_until: delay.map(|d| Instant::now() + d),
+            finished: false,
+        }
+    }
+
+    fn triggered(character: Arc<Character>, trigger: Arc<Trigger>, log: Arc<LogEvent>) -> Action {
+        Action {
+            kind: ActionKind::Triggered {
+                character,
+                trigger,
+                log,
+            },
+            delay_until: None,
             finished: false,
         }
     }
@@ -63,6 +81,18 @@ impl Action {
         }
 
         match &self.kind {
+            ActionKind::Triggered {
+                character,
+                trigger,
+                log,
+            } => {
+                self.finished = true;
+                Some(vec![Event::new(EventKind::Triggered {
+                    character: character.clone(),
+                    trigger: trigger.clone(),
+                    log: log.clone(),
+                })])
+            }
             ActionKind::DisplayText { text } => {
                 self.finished = true;
                 Some(vec![Event::new(EventKind::DisplayText(text.clone()))])
@@ -77,25 +107,33 @@ impl Action {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledTrigger {
-    trigger: Trigger,
+    character: Arc<Character>,
+    trigger: Arc<Trigger>,
     regex: Regex,
 }
 
 impl CompiledTrigger {
-    pub(crate) fn new(trigger: &Trigger) -> Result<CompiledTrigger> {
+    pub(crate) fn new(character: &Character, trigger: &Trigger) -> Result<CompiledTrigger> {
         Ok(CompiledTrigger {
-            trigger: trigger.clone(),
+            character: Arc::new(character.clone()),
+            trigger: Arc::new(trigger.clone()),
             regex: Regex::new(trigger.search_text.as_str())?,
         })
     }
 
     pub(crate) fn execute(&self, event: &Arc<LogEvent>) -> Option<Vec<Action>> {
-        self.regex.captures(event.message.as_str()).map(|caps| {
-            self.trigger
+        self.regex.captures(event.message()).map(|caps| {
+            let mut actions: Vec<Action> = self
+                .trigger
                 .actions
                 .iter()
-                .map(|a| Action::new(event.clone(), &caps, a))
-                .collect()
+                .map(|a| Action::new(&caps, a))
+                .collect();
+            actions.insert(
+                0,
+                Action::triggered(self.character.clone(), self.trigger.clone(), event.clone()),
+            );
+            actions
         })
     }
 }

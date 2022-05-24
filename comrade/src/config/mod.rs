@@ -50,16 +50,14 @@ impl Default for Directories {
 #[serde(transparent)]
 pub(crate) struct CharacterId(String);
 
-#[derive(Deserialize, Debug)]
-pub(crate) struct Character {
-    #[serde(rename = "name")]
-    pub(crate) _name: String,
-    #[serde(rename = "server")]
-    pub(crate) _server: String,
-    pub(crate) filename: PathBuf,
+#[derive(Deserialize, Debug, Clone)]
+pub struct Character {
+    pub name: String,
+    pub server: String,
+    pub filename: PathBuf,
     #[serde(rename = "disabled-triggers")]
     #[serde(with = "disabled_triggers")]
-    pub(crate) disabled_triggers: HashMap<TriggerRef, DisabledTrigger>,
+    pub disabled_triggers: HashMap<TriggerRef, DisabledTrigger>,
 }
 
 #[derive(Deserialize, Debug, Default)]
