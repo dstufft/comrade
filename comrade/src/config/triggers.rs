@@ -10,13 +10,11 @@ use regex::RegexSet;
 use serde::Deserialize;
 use serde_with::{serde_as, DurationSeconds};
 
-use crate::config::{Character, CharacterId, Result as ConfigResult};
-use crate::errors::{ConfigError, TriggerError};
+use crate::config::{Character, CharacterId, Result};
+use crate::errors::ConfigError;
 use crate::triggers::CompiledTrigger;
 
 const TRIGGER_FILENAME: &str = "Triggers.toml";
-
-type Result<T, E = TriggerError> = core::result::Result<T, E>;
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub(crate) struct TriggerRef {
@@ -85,7 +83,7 @@ pub(crate) struct TriggerSet {
 
 #[derive(Default, Debug)]
 pub(crate) struct Triggers {
-    triggers: BTreeMap<TriggerSource, TriggerSet>,
+    _triggers: BTreeMap<TriggerSource, TriggerSet>,
     compiled: HashMap<CharacterId, Vec<CompiledTrigger>>,
     filters: HashMap<CharacterId, RegexSet>,
 }
@@ -94,7 +92,7 @@ impl Triggers {
     pub(super) fn load(
         data_dir: &Path,
         characters: &HashMap<CharacterId, Character>,
-    ) -> ConfigResult<Triggers> {
+    ) -> Result<Triggers> {
         let mut triggers = BTreeMap::new();
         let mut compiled = HashMap::new();
         let mut filters = HashMap::new();
@@ -143,7 +141,7 @@ impl Triggers {
             .collect();
 
         Ok(Triggers {
-            triggers,
+            _triggers: triggers,
             compiled,
             filters,
         })
@@ -164,7 +162,7 @@ impl Triggers {
     }
 }
 
-fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> ConfigResult<Option<TriggerSet>> {
+fn load_triggers_from_dir(dir: &Path, allow_missing: bool) -> Result<Option<TriggerSet>> {
     debug!("loading triggers from {}", dir.display());
 
     let path = dir.join(TRIGGER_FILENAME);
