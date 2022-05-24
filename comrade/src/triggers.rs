@@ -17,7 +17,7 @@ enum ActionKind {
 
 #[derive(Debug)]
 pub(crate) struct Action {
-    log: Arc<LogEvent>,
+    _log: Arc<LogEvent>,
     kind: ActionKind,
     delay_until: Option<Instant>,
     finished: bool,
@@ -44,7 +44,7 @@ impl Action {
         };
 
         Action {
-            log,
+            _log: log,
             kind,
             delay_until: delay.map(|d| Instant::now() + d),
             finished: false,
